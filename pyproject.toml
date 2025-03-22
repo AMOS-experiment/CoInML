@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+    packages = ["src/**/*"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[project]
+name = "CoInML"
+version = "0.1.0"
+description = "Correlation in Coincidence Data with Machine Learning"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.11"
+
+dependencies = [
+    "umap-learn"
+]
+
+[project.optional-dependencies]
+dev = [
+    "black==24.2.0",
+    "flake8==7.0.0",
+    "isort==5.13.2",
+    "pre-commit==3.6.2",
+    "pytest==8.1.1",
+]

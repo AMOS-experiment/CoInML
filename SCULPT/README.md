@@ -29,7 +29,8 @@ python src/app.py
 
 3. Open your browser to http://localhost:9000
 
-Usage
+## Usage
+
 1. Data Upload
 
 Drag and drop CSV files containing momentum data
@@ -52,10 +53,11 @@ Use lasso/box selection tools
 Apply filters (density, physics parameters)
 Export selected data
 
-Example Data
+## Example Data
 Example COLTRIMS datasets are provided in data/examples/
 
-Documentation
+## Documentation
 See the docs/ directory for detailed documentation.
-License
+
+## License
 MIT License

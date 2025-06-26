@@ -4,60 +4,69 @@ SCULPT is a comprehensive machine learning framework for analyzing high-dimensio
 
 ## Features
 
-- **Interactive UMAP visualization** for high-dimensional momentum data
-- **Adaptive confidence scoring** for clustering validation
-- **Genetic programming** for automated feature discovery
-- **Deep autoencoders** for non-linear feature extraction
-- **Flexible molecular configuration** system
-- **Real-time filtering** and selection tools
+- **Interactive UMAP visualization** for high-dimensional momentum data  
+- **Adaptive confidence scoring** for clustering validation  
+- **Genetic programming** for automated feature discovery  
+- **Deep autoencoders** for non-linear feature extraction  
+- **Flexible molecular configuration** system  
+- **Real-time filtering** and selection tools  
 
 ## Installation
 
 ### Requirements
-- Python 3.8 or higher
-- 8GB RAM minimum (16GB recommended)
-- Modern web browser
+
+- Python 3.8 or higher  
+- 8GB RAM minimum (16GB recommended)  
+- Modern web browser  
 
 ### Quick Start
 
 1. Install dependencies:
-```bash
-pip install -r requirements.txt
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 2. Run the application:
-python src/app.py
+   ```bash
+   python src/app.py
+   ```
 
-3. Open your browser to http://localhost:9000
+3. Open your browser to:  
+   [http://localhost:9000](http://localhost:9000)
 
 ## Usage
 
-1. Data Upload
+### 1. Data Upload
 
-Drag and drop CSV files containing momentum data
-Expected format: Px, Py, Pz for each particle
+- Drag and drop CSV files containing momentum data  
+- Expected format: `Px, Py, Pz` for each particle  
 
-2. Configure Molecular System
+### 2. Configure Molecular System
 
-Select or create a molecular profile (e.g., D2O, HDO)
-Assign profiles to uploaded files
+- Select or create a molecular profile (e.g., D₂O, HDO)  
+- Assign profiles to uploaded files  
 
-3. Run Analysis
+### 3. Run Analysis
 
-Choose features for UMAP embedding
-Adjust parameters (n_neighbors, min_dist)
-Click "Run UMAP"
+- Choose features for UMAP embedding  
+- Adjust parameters (`n_neighbors`, `min_dist`)  
+- Click **"Run UMAP"**
 
-4. Explore Results
+### 4. Explore Results
 
-Use lasso/box selection tools
-Apply filters (density, physics parameters)
-Export selected data
+- Use lasso/box selection tools  
+- Apply filters (density, physics parameters)  
+- Export selected data  
 
 ## Example Data
-Example COLTRIMS datasets are provided in data/examples/
+
+Example COLTRIMS datasets are provided in:  
+`data/examples/`
 
 ## Documentation
-See the docs/ directory for detailed documentation.
+
+See the `docs/` directory for detailed documentation.
 
 ## License
+
 MIT License

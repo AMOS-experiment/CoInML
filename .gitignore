@@ -1,3 +1,21 @@
+# Data files (except examples)
+*.csv
+*.dat
+!data/examples/*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+temp/
+
 # Byte-compiled / optimized / DLL files
 **pycache**
 **cache**
@@ -7,8 +25,9 @@
 # C extensions
 *.so
 
-# MacOS
-**.DS_Store**
+# OS
+.DS_Store
+Thumbs.db
 
 # Project
 data/*

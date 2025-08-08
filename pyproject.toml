@@ -39,3 +39,6 @@ dev = [
     "pre-commit==3.6.2",
     "pytest==8.1.1",
 ]
+
+[tool.isort]
+profile = "black"

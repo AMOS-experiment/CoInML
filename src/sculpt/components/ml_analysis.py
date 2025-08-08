@@ -795,38 +795,6 @@ def create_genetic_tab():
                             value=["basic", "trig", "sqrt_pow", "special"],
                         ),
                         html.Br(),
-                        html.Div(
-                            [
-                                html.Label("Select Data Source:"),
-                                dcc.RadioItems(
-                                    id="genetic-data-source",
-                                    options=[
-                                        {
-                                            "label": "All Data",
-                                            "value": "all",
-                                        },
-                                        {
-                                            "label": "Graph 1 Selection",
-                                            "value": "graph1-selection",
-                                        },
-                                        {
-                                            "label": "Graph 3 Selection",
-                                            "value": "graph3-selection",
-                                        },
-                                        {
-                                            "label": "Autoencoder Latent Space",
-                                            "value": "autoencoder-latent",
-                                        },
-                                    ],
-                                    value="all",
-                                    labelStyle={
-                                        "display": "block",
-                                        "marginBottom": "5px",
-                                    },
-                                ),
-                            ]
-                        ),
-                        html.Br(),
                         html.Button(
                             "Run Genetic Feature Discovery",
                             id="run-genetic-features",

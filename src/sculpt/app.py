@@ -71,7 +71,7 @@ from sculpt.callbacks.initialization_callbacks import (  # noqa: F401
     init_umap_filter_graph,
 )
 from sculpt.callbacks.mutual_information_callbacks import (  # noqa: F401
-    run_mi_feature_selection_and_umap,
+    run_mi_feature_selection,
     update_feature_importance_table,
 )
 from sculpt.callbacks.selection_callbacks import (  # noqa: F401

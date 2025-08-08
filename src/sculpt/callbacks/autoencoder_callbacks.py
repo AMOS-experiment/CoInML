@@ -1741,6 +1741,7 @@ def run_umap_on_mi_features(
                             }
                         )
 
+                    # TODO: Consider creating a function that lives in /src/sculpt/utils/ui.py (maybe)
                     # Create the MI analysis UI with a table showing all features
                     mi_analysis_ui = html.Div(
                         [

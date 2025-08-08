@@ -1,7 +1,14 @@
 import dash
 
 from sculpt.callbacks.autoencoder_callbacks import (  # noqa: F401
+    calculate_features_after_assignment,
+    run_umap_on_mi_features,
     train_autoencoder_and_run_umap,
+    train_mi_autoencoder,
+    update_autoencoder_genetic_features,
+    update_mi_feature_importance_table,
+    update_mi_scatter_plot,
+    update_mi_status,
 )
 from sculpt.callbacks.config_callbacks import (  # noqa: F401
     create_profile,

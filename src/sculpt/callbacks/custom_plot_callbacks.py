@@ -1,9 +1,13 @@
 import numpy as np
 import pandas as pd
-from dash import Input, Output, State, callback, html
-from plotly import express as px
+import plotly.express as px
+import plotly.graph_objects as go
+from dash import ALL, Input, Output, State, callback, callback_context, html, no_update
 
-from sculpt.utils.metrics.physics_features import calculate_physics_features
+from sculpt.utils.metrics.physics_features import (
+    calculate_physics_features_with_profile,
+    has_physics_features,
+)
 
 
 @callback(
@@ -411,6 +415,8 @@ def update_custom_feature_plot(
     State("heatmap-colorscale-graph15", "value"),
     State("show-points-overlay-graph15", "value"),
     State("color-mode-graph15", "value"),
+    State("file-config-assignments-store", "data"),  # ADD THIS
+    State("configuration-profiles-store", "data"),  # ADD THIS
     prevent_initial_call=True,
 )
 def update_scatter_graph15(
@@ -426,7 +432,9 @@ def update_scatter_graph15(
     heatmap_colorscale,
     show_points_overlay,
     color_mode,
-):
+    assignments_store,
+    profiles_store,
+):  # ADD PARAMETERS
     """Generate custom scatter plot for Graph 1.5."""
     if not stored_files:
         return {}, "No files uploaded.", []
@@ -464,19 +472,40 @@ def update_scatter_graph15(
                         # Regular COLTRIMS file
                         df["file_label"] = f["filename"]  # Add file name as a label
 
-                        # Calculate physics features for this file's data
-                        df_with_features = calculate_physics_features(df)
+                        # Check if physics features already exist
+                        if not has_physics_features(df):
+                            profile_name = (
+                                assignments_store.get(f["filename"])
+                                if assignments_store
+                                else None
+                            )
+
+                            if (
+                                profile_name
+                                and profile_name != "none"
+                                and profiles_store
+                                and profile_name in profiles_store
+                            ):
+                                profile_config = profiles_store[profile_name]
+                                try:
+                                    df = calculate_physics_features_with_profile(
+                                        df, profile_config
+                                    )
+                                except Exception as e:
+                                    debug_str += f"Error calculating features for {f['filename']}: {str(e)}.<br>"
+                                    continue  # Skip this file
+                            else:
+                                debug_str += f"Skipping {f['filename']} - no valid profile assigned.<br>"
+                                continue  # Skip files without proper profile assignment
 
                         # Sample the data to reduce processing time
                         sample_size = max(
-                            int(len(df_with_features) * sample_frac), 100
+                            int(len(df) * sample_frac), 100
                         )  # Ensure at least 100 points
-                        if len(df_with_features) > sample_size:
-                            sampled = df_with_features.sample(
-                                n=sample_size, random_state=42
-                            )
+                        if len(df) > sample_size:
+                            sampled = df.sample(n=sample_size, random_state=42)
                         else:
-                            sampled = df_with_features
+                            sampled = df
 
                         debug_str += f"{f['filename']}: {len(df)} events, sampled {len(sampled)}.<br>"
                         sampled_dfs.append(sampled)
@@ -541,7 +570,6 @@ def update_scatter_graph15(
             )
 
         # Create color maps for file labels and clusters
-        import plotly.graph_objects as go
 
         # Create color map based on file labels
         unique_labels = combined_df["file_label"].unique()
@@ -834,6 +862,9 @@ def update_scatter_graph15(
                 ),
             ]
 
+        # Convert debug_text list to string for output
+        debug_str += "<br>".join(debug_text)
+
         return fig, debug_str, metrics_children
 
     except Exception as e:
@@ -854,6 +885,8 @@ def update_scatter_graph15(
     State("scatter-graph15", "figure"),
     State("file-selector-graph15", "value"),
     State("stored-files", "data"),
+    State("file-config-assignments-store", "data"),  # ADD THIS
+    State("configuration-profiles-store", "data"),  # ADD THIS
     prevent_initial_call=True,
 )
 def update_graph25(
@@ -864,7 +897,9 @@ def update_graph25(
     original_figure,
     selected_ids,
     stored_files,
-):
+    assignments_store,
+    profiles_store,
+):  # ADD THESE PARAMETERS
     """Display the selected points from Graph 1.5."""
     if not n_clicks or not selectedData:
         return {}, "No points selected.", "No points selected."
@@ -884,10 +919,38 @@ def update_graph25(
                     df["file_label"] = f["filename"]  # Add file name as a label
 
                     if not is_selection:
-                        # Calculate physics features
-                        df = calculate_physics_features(df)
+                        # Check if physics features already exist
+                        if not has_physics_features(df):
+                            profile_name = (
+                                assignments_store.get(f["filename"])
+                                if assignments_store
+                                else None
+                            )
+
+                            if (
+                                profile_name
+                                and profile_name != "none"
+                                and profiles_store
+                                and profile_name in profiles_store
+                            ):
+                                profile_config = profiles_store[profile_name]
+                                try:
+                                    df = calculate_physics_features_with_profile(
+                                        df, profile_config
+                                    )
+                                except Exception as e:
+                                    debug_text.append(
+                                        f"Error calculating features for {f['filename']}: {str(e)}"
+                                    )
+                                    continue  # Skip this file
+                            else:
+                                debug_text.append(
+                                    f"Skipping {f['filename']} - no valid profile assigned"
+                                )
+                                continue  # Skip files without proper profile assignment
 
                     sampled_dfs.append(df)
+
                 except Exception as e:
                     debug_text.append(f"Error processing {f['filename']}: {str(e)}")
 
@@ -1043,3 +1106,63 @@ def update_graph25(
 
         trace = traceback.format_exc()
         return {}, f"Error: {str(e)}<br><pre>{trace}</pre>", f"Error: {str(e)}"
+
+
+def create_select_all_callback(id_prefix):
+    """Create a callback for Select All/None functionality for a specific id_prefix."""
+
+    @callback(
+        Output({"type": f"feature-selector-{id_prefix}", "category": ALL}, "value"),
+        Input({"type": f"select-all-btn-{id_prefix}", "index": ALL}, "n_clicks"),
+        Input({"type": f"select-none-btn-{id_prefix}", "index": ALL}, "n_clicks"),
+        State({"type": f"feature-selector-{id_prefix}", "category": ALL}, "options"),
+        State({"type": f"feature-selector-{id_prefix}", "category": ALL}, "id"),
+        prevent_initial_call=True,
+    )
+    def handle_select_buttons(all_clicks, none_clicks, all_options, all_ids):
+        """Handle Select All and Select None button clicks."""
+        ctx = callback_context
+        if not ctx.triggered:
+            return no_update
+
+        # Get which button was clicked
+        triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        triggered_info = eval(triggered_id)  # Convert string to dict
+
+        # Initialize result with current values
+        result = [no_update] * len(all_options)
+
+        if "select-all-btn" in triggered_info["type"]:
+            clicked_index = triggered_info["index"]
+            if clicked_index == "all":
+                # Select all features in all categories
+                result = [[opt["value"] for opt in options] for options in all_options]
+            else:
+                # Select all features in specific category
+                for i, category_id in enumerate(all_ids):
+                    if category_id["category"] == clicked_index:
+                        result[i] = [opt["value"] for opt in all_options[i]]
+
+        elif "select-none-btn" in triggered_info["type"]:
+            clicked_index = triggered_info["index"]
+            if clicked_index == "all":
+                # Deselect all features in all categories
+                result = [[]] * len(all_options)
+            else:
+                # Deselect all features in specific category
+                for i, category_id in enumerate(all_ids):
+                    if category_id["category"] == clicked_index:
+                        result[i] = []
+
+        return result
+
+    return handle_select_buttons
+
+
+# Register callbacks for each feature selection UI
+create_select_all_callback("graph1")
+create_select_all_callback("graph3")
+create_select_all_callback("graph3-selection")
+create_select_all_callback("autoencoder")
+create_select_all_callback("genetic")
+create_select_all_callback("mi")

@@ -1,11 +1,14 @@
 import dash
 import numpy as np
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 from dash import Input, Output, State, callback, html
 
-from sculpt.utils.metrics.physics_features import calculate_physics_features
+from sculpt.utils.metrics.physics_features import (
+    calculate_physics_features,
+    calculate_physics_features_with_profile,
+    has_physics_features,
+)
 
 
 # Callback to apply density filter
@@ -22,6 +25,8 @@ from sculpt.utils.metrics.physics_features import calculate_physics_features
     State("file-selector-graph15", "value"),
     State("stored-files", "data"),
     State("sample-frac-graph15", "value"),  # Add sampling control
+    State("file-config-assignments-store", "data"),  # ADD THIS
+    State("configuration-profiles-store", "data"),  # ADD THIS
     prevent_initial_call=True,
 )
 def apply_density_filter(
@@ -33,7 +38,9 @@ def apply_density_filter(
     selected_ids,
     stored_files,
     sample_frac,
-):
+    assignments_store,
+    profiles_store,
+):  # ADD PARAMETERS
     ctx = dash.callback_context
     if not ctx.triggered or "apply-density-filter" not in ctx.triggered[0]["prop_id"]:
         raise dash.exceptions.PreventUpdate
@@ -61,8 +68,35 @@ def apply_density_filter(
                     df["file_label"] = f["filename"]  # Add file name as a label
 
                     if not is_selection:
-                        # Calculate physics features
-                        df = calculate_physics_features(df)
+                        # Check if physics features already exist
+                        if not has_physics_features(df):
+                            profile_name = (
+                                assignments_store.get(f["filename"])
+                                if assignments_store
+                                else None
+                            )
+
+                            if (
+                                profile_name
+                                and profile_name != "none"
+                                and profiles_store
+                                and profile_name in profiles_store
+                            ):
+                                profile_config = profiles_store[profile_name]
+                                try:
+                                    df = calculate_physics_features_with_profile(
+                                        df, profile_config
+                                    )
+                                except Exception as e:
+                                    print(
+                                        f"Error calculating features for {f['filename']}: {e}"
+                                    )
+                                    continue  # Skip this file
+                            else:
+                                print(
+                                    f"Skipping {f['filename']} - no valid profile assigned"
+                                )
+                                continue  # Skip files without proper profile assignment
 
                         # Apply sampling to reduce processing time
                         if len(df) > 1000:
@@ -117,7 +151,7 @@ def apply_density_filter(
             f"Using {num_bins} bins for density estimation on {len(feature_data)} points"
         )
 
-        x_min, x_max = np.min(feature_data[:, 0]), np.max(feature_data[:, 0])
+        x_min, x_max = np.min(feature_data[:, 0]), np.max(feature_data[:, 1])
         y_min, y_max = np.min(feature_data[:, 1]), np.max(feature_data[:, 1])
 
         # Add small padding to min/max
@@ -189,6 +223,7 @@ def apply_density_filter(
             )
 
         # Create visualization of filtered data - OPTIMIZED RENDERING
+        import plotly.express as px
         import plotly.graph_objects as go
 
         fig = go.Figure()
@@ -314,6 +349,8 @@ def apply_density_filter(
     State("stored-files", "data"),
     State("x-axis-feature-graph15", "value"),
     State("y-axis-feature-graph15", "value"),
+    State("file-config-assignments-store", "data"),  # ADD THIS
+    State("configuration-profiles-store", "data"),  # ADD THIS
     prevent_initial_call=True,
 )
 def apply_parameter_filter(
@@ -324,7 +361,9 @@ def apply_parameter_filter(
     stored_files,
     x_feature,
     y_feature,
-):
+    assignments_store,
+    profiles_store,
+):  # ADD PARAMETERS
     ctx = dash.callback_context
     if not ctx.triggered or "apply-parameter-filter" not in ctx.triggered[0]["prop_id"]:
         raise dash.exceptions.PreventUpdate
@@ -346,8 +385,35 @@ def apply_parameter_filter(
                     df["file_label"] = f["filename"]  # Add file name as a label
 
                     if not is_selection:
-                        # Calculate physics features
-                        df = calculate_physics_features(df)
+                        # Check if physics features already exist
+                        if not has_physics_features(df):
+                            profile_name = (
+                                assignments_store.get(f["filename"])
+                                if assignments_store
+                                else None
+                            )
+
+                            if (
+                                profile_name
+                                and profile_name != "none"
+                                and profiles_store
+                                and profile_name in profiles_store
+                            ):
+                                profile_config = profiles_store[profile_name]
+                                try:
+                                    df = calculate_physics_features_with_profile(
+                                        df, profile_config
+                                    )
+                                except Exception as e:
+                                    print(
+                                        f"Error calculating features for {f['filename']}: {e}"
+                                    )
+                                    continue  # Skip this file
+                            else:
+                                print(
+                                    f"Skipping {f['filename']} - no valid profile assigned"
+                                )
+                                continue  # Skip files without proper profile assignment
 
                     sampled_dfs.append(df)
                 except Exception as e:
@@ -391,6 +457,9 @@ def apply_parameter_filter(
             )
 
         # Create visualization of filtered data - simpler version
+        import plotly.express as px
+        import plotly.graph_objects as go
+
         fig = go.Figure()
 
         # Add filtered data traces - group by file label
@@ -414,13 +483,22 @@ def apply_parameter_filter(
             )
 
         # Add a separate trace for all original data points (no histogram inset)
+        # Sample if too many points for performance
+        if len(combined_df) > 5000:
+            background_idx = np.random.choice(
+                len(combined_df), size=5000, replace=False
+            )
+            background_df = combined_df.iloc[background_idx]
+        else:
+            background_df = combined_df
+
         fig.add_trace(
             go.Scatter(
-                x=combined_df[x_feature],
-                y=combined_df[y_feature],
+                x=background_df[x_feature],
+                y=background_df[y_feature],
                 mode="markers",
                 marker=dict(size=4, color="gray", opacity=0.1),
-                name="All data points",
+                name=f"All data points ({len(combined_df)} total)",
                 showlegend=True,
             )
         )
@@ -945,10 +1023,17 @@ def apply_umap_parameter_filter(
     State("scatter-graph15", "figure"),
     State("file-selector-graph15", "value"),
     State("stored-files", "data"),
+    State("file-config-assignments-store", "data"),  # ADD THIS
+    State("configuration-profiles-store", "data"),  # ADD THIS
 )
 def update_parameter_filter_controls(
-    selected_parameter, figure, selected_ids, stored_files
-):
+    selected_parameter,
+    figure,
+    selected_ids,
+    stored_files,
+    assignments_store,
+    profiles_store,
+):  # ADD PARAMETERS
     """Update the parameter filter controls based on the selected parameter."""
     if not selected_parameter:
         return {"display": "none"}, 0, 100, {0: "0", 100: "100"}, [0, 100]
@@ -960,20 +1045,59 @@ def update_parameter_filter_controls(
         for f in stored_files:
             if f["id"] in selected_ids:
                 df = pd.read_json(f["data"], orient="split")
-                if selected_parameter not in df.columns:
-                    df = calculate_physics_features(df)
+                is_selection = f.get("is_selection", False)
+
+                # Only calculate features for non-selection files
+                if not is_selection and selected_parameter not in df.columns:
+                    # Check if physics features need to be calculated
+                    if not has_physics_features(df):
+                        profile_name = (
+                            assignments_store.get(f["filename"])
+                            if assignments_store
+                            else None
+                        )
+
+                        if (
+                            profile_name
+                            and profile_name != "none"
+                            and profiles_store
+                            and profile_name in profiles_store
+                        ):
+                            profile_config = profiles_store[profile_name]
+                            try:
+                                df = calculate_physics_features_with_profile(
+                                    df, profile_config
+                                )
+                            except Exception as e:
+                                print(
+                                    f"Error calculating features for {f['filename']}: {e}"
+                                )
+                                continue  # Skip this file
+                        else:
+                            print(
+                                f"Skipping {f['filename']} - no valid profile assigned"
+                            )
+                            continue  # Skip files without proper profile assignment
+
+                # Only add to sampled_dfs if the parameter exists
                 if selected_parameter in df.columns:
-                    sampled_dfs.append(df)
+                    sampled_dfs.append(
+                        df[[selected_parameter]]
+                    )  # Only keep the needed column for efficiency
 
         if not sampled_dfs:
             return {"display": "block"}, 0, 100, {0: "0", 100: "100"}, [0, 100]
 
-        combined_df = pd.concat(sampled_dfs, ignore_index=True)
-        if selected_parameter not in combined_df.columns:
-            return {"display": "block"}, 0, 100, {0: "0", 100: "100"}, [0, 100]
+        # Combine only the parameter column from all dataframes
+        combined_param = pd.concat(sampled_dfs, ignore_index=True)
 
-        param_min = float(combined_df[selected_parameter].min())
-        param_max = float(combined_df[selected_parameter].max())
+        param_min = float(combined_param[selected_parameter].min())
+        param_max = float(combined_param[selected_parameter].max())
+
+        # Handle edge case where min equals max
+        if param_min == param_max:
+            param_min = param_min - 1
+            param_max = param_max + 1
 
         # Round the values for better display
         param_min = np.floor(param_min)
@@ -982,15 +1106,18 @@ def update_parameter_filter_controls(
         # Create marks dictionary
         num_steps = 5
         step_size = (param_max - param_min) / (num_steps - 1)
-        marks = {
-            param_min + i * step_size: f"{param_min + i * step_size:.1f}"
-            for i in range(num_steps)
-        }
+        marks = {}
+        for i in range(num_steps):
+            value = param_min + i * step_size
+            marks[value] = f"{value:.1f}"
 
         return {"display": "block"}, param_min, param_max, marks, [param_min, param_max]
 
     except Exception as e:
         print(f"Error updating parameter filter controls: {e}")
+        import traceback
+
+        traceback.print_exc()
         return {"display": "block"}, 0, 100, {0: "0", 100: "100"}, [0, 100]
 
 
@@ -1080,39 +1207,81 @@ def update_parameter_filter_controls_visibility(selected_parameter):
     Input("physics-parameter-dropdown", "value"),
     State("file-selector-graph15", "value"),
     State("stored-files", "data"),
+    State("file-config-assignments-store", "data"),  # ADD THIS
+    State("configuration-profiles-store", "data"),  # ADD THIS
     prevent_initial_call=True,
 )
-def update_parameter_filter_range(selected_parameter, selected_ids, stored_files):
+def update_parameter_filter_range(
+    selected_parameter, selected_ids, stored_files, assignments_store, profiles_store
+):  # ADD PARAMETERS
     """Update the parameter filter range based on the selected parameter."""
     if not selected_parameter:
         return 0, 100, {0: "0", 100: "100"}, [0, 100]
 
     # Load data to determine parameter range
     try:
-        sampled_dfs = []
+        param_values = []  # Collect all parameter values
+
         for f in stored_files:
             if f["id"] in selected_ids:
                 df = pd.read_json(f["data"], orient="split")
-                if selected_parameter not in df.columns:
-                    df = calculate_physics_features(df)
-                if selected_parameter in df.columns:
-                    sampled_dfs.append(df)
+                is_selection = f.get("is_selection", False)
 
-        if not sampled_dfs:
+                # Only process non-selection files
+                if not is_selection:
+                    # Check if the parameter already exists
+                    if selected_parameter not in df.columns:
+                        # Check if physics features need to be calculated
+                        if not has_physics_features(df):
+                            profile_name = (
+                                assignments_store.get(f["filename"])
+                                if assignments_store
+                                else None
+                            )
+
+                            if (
+                                profile_name
+                                and profile_name != "none"
+                                and profiles_store
+                                and profile_name in profiles_store
+                            ):
+                                profile_config = profiles_store[profile_name]
+                                try:
+                                    df = calculate_physics_features_with_profile(
+                                        df, profile_config
+                                    )
+                                except Exception as e:
+                                    print(
+                                        f"Error calculating features for {f['filename']}: {e}"
+                                    )
+                                    continue  # Skip this file
+                            else:
+                                print(
+                                    f"Skipping {f['filename']} - no valid profile assigned"
+                                )
+                                continue  # Skip files without proper profile assignment
+
+                    # Extract parameter values if they exist
+                    if selected_parameter in df.columns:
+                        param_values.extend(df[selected_parameter].dropna().tolist())
+
+        if not param_values:
             return 0, 100, {0: "0", 100: "100"}, [0, 100]
 
-        combined_df = pd.concat(sampled_dfs, ignore_index=True)
-        if selected_parameter not in combined_df.columns:
-            return 0, 100, {0: "0", 100: "100"}, [0, 100]
+        # Calculate min and max from all values
+        param_min = float(min(param_values))
+        param_max = float(max(param_values))
 
-        param_min = float(combined_df[selected_parameter].min())
-        param_max = float(combined_df[selected_parameter].max())
+        # Handle edge case where min equals max
+        if param_min == param_max:
+            param_min = param_min - 1
+            param_max = param_max + 1
 
         # Round the values for better display
         param_min = np.floor(param_min)
         param_max = np.ceil(param_max)
 
-        # Create marks dictionary with fewer marks
+        # Create marks dictionary with 5 evenly spaced marks
         steps = [0, 0.25, 0.5, 0.75, 1.0]
         marks = {}
         for step in steps:
@@ -1123,4 +1292,7 @@ def update_parameter_filter_range(selected_parameter, selected_ids, stored_files
 
     except Exception as e:
         print(f"Error updating parameter range: {e}")
+        import traceback
+
+        traceback.print_exc()
         return 0, 100, {0: "0", 100: "100"}, [0, 100]

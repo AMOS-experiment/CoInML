@@ -4,10 +4,6 @@ import dash
 from dash import ALL, Input, Output, State, callback, html
 
 from sculpt.utils.file_handlers import parse_contents, reorganize_df
-from sculpt.utils.metrics.physics_features import (
-    calculate_physics_features_flexible,
-    calculate_physics_features_with_profile,
-)
 from sculpt.utils.ui import create_feature_categories_ui
 
 
@@ -88,77 +84,82 @@ def update_files(
                                     )
 
                                     # Calculate physics features
-                                    try:
-                                        print(f"Calculating features for {fname}...")
-                                        sample_size = min(1000, len(df_reorg))
-                                        df_sample = (
-                                            df_reorg.sample(
-                                                n=sample_size, random_state=42
-                                            )
-                                            if len(df_reorg) > sample_size
-                                            else df_reorg
-                                        )
+                                    print(
+                                        f"Deferring feature calculation for {fname} until profile assignment"
+                                    )
 
-                                        # Get molecular configuration from the stores
-                                        profiles_store = ctx.states.get(
-                                            "configuration-profiles-store.data", {}
-                                        )
-                                        assignments_store = ctx.states.get(
-                                            "file-config-assignments-store.data", {}
-                                        )
+                                    # TODO: Check if this was indeed deleted
+                                    # try:
+                                    #     print(f"Calculating features for {fname}...")
+                                    #     sample_size = min(1000, len(df_reorg))
+                                    #     df_sample = (
+                                    #         df_reorg.sample(
+                                    #             n=sample_size, random_state=42
+                                    #         )
+                                    #         if len(df_reorg) > sample_size
+                                    #         else df_reorg
+                                    #     )
 
-                                        # Process file with its assigned configuration
-                                        profile_name = (
-                                            assignments_store.get(fname)
-                                            if assignments_store
-                                            else None
-                                        )
+                                    #     # Get molecular configuration from the stores
+                                    #     profiles_store = ctx.states.get(
+                                    #         "configuration-profiles-store.data", {}
+                                    #     )
+                                    #     assignments_store = ctx.states.get(
+                                    #         "file-config-assignments-store.data", {}
+                                    #     )
 
-                                        if (
-                                            profile_name
-                                            and profiles_store
-                                            and profile_name in profiles_store
-                                        ):
-                                            # Use the assigned profile
-                                            profile_config = profiles_store[
-                                                profile_name
-                                            ]
-                                            print(
-                                                f"Processing {fname} with profile: {profile_name}"
-                                            )
-                                            df_features = (
-                                                calculate_physics_features_with_profile(
-                                                    df_sample, profile_config
-                                                )
-                                            )
-                                        else:
-                                            # Use default configuration
-                                            print(
-                                                f"Processing {fname} with default configuration"
-                                            )
-                                            df_features = (
-                                                calculate_physics_features_flexible(
-                                                    df_sample, None
-                                                )
-                                            )
-                                        print(
-                                            f"Feature calculation complete for {fname}"
-                                        )
+                                    #     # Process file with its assigned configuration
+                                    #     profile_name = (
+                                    #         assignments_store.get(fname)
+                                    #         if assignments_store
+                                    #         else None
+                                    #     )
 
-                                        # Store the column names
-                                        if "column_names" not in features_store:
-                                            features_store["column_names"] = list(
-                                                df_features.columns
-                                            )
-                                            print("Updated feature column names")
-                                    except Exception as e:
-                                        print(
-                                            f"Error during feature calculation for {fname}: {e}"
-                                        )
-                                        import traceback
+                                    #     if (
+                                    #         profile_name
+                                    #         and profiles_store
+                                    #         and profile_name in profiles_store
+                                    #     ):
+                                    #         # Use the assigned profile
+                                    #         profile_config = profiles_store[
+                                    #             profile_name
+                                    #         ]
+                                    #         print(
+                                    #             f"Processing {fname} with profile: {profile_name}"
+                                    #         )
+                                    #         df_features = (
+                                    #             calculate_physics_features_with_profile(
+                                    #                 df_sample, profile_config
+                                    #             )
+                                    #         )
+                                    #     else:
+                                    #         # Use default configuration
+                                    #         print(
+                                    #             f"Processing {fname} with default configuration"
+                                    #         )
+                                    #         df_features = (
+                                    #             calculate_physics_features_flexible(
+                                    #                 df_sample, None
+                                    #             )
+                                    #         )
+                                    #     print(
+                                    #         f"Feature calculation complete for {fname}"
+                                    #     )
 
-                                        traceback.print_exc()
-                                        df_features = df_reorg
+                                    #     # Store the column names
+                                    #     if "column_names" not in features_store:
+                                    #         features_store["column_names"] = list(
+                                    #             df_features.columns
+                                    #         )
+                                    #         print("Updated feature column names")
+                                    # except Exception as e:
+                                    #     print(
+                                    #         f"Error during feature calculation for {fname}: {e}"
+                                    #     )
+                                    #     import traceback
+
+                                    #     traceback.print_exc()
+                                    #     df_features = df_reorg
 
                                     file_dict = {
                                         "id": next_id,

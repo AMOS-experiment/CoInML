@@ -132,7 +132,9 @@ def update_genetic_feature_ui(features_data, genetic_features_store):
 
 
 @callback(
-    Output("feature-selection-ui-mi", "children"),
+    Output(
+        "mi-feature-selection-ui", "children"
+    ),  # This should match the ID in your MI tab
     Input("features-data-store", "data"),
     Input("mi-features-store", "data"),
     prevent_initial_call=True,

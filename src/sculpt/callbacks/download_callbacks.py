@@ -4,7 +4,10 @@ import pandas as pd
 from dash import Input, Output, State, callback, dcc
 from matplotlib.path import Path  # For lasso selection
 
-from sculpt.utils.metrics.physics_features import calculate_physics_features
+from sculpt.utils.metrics.physics_features import (
+    calculate_physics_features_with_profile,
+    has_physics_features,
+)
 
 
 # Callback to handle the download of selected points from the new graph
@@ -497,6 +500,8 @@ def download_mi_features(n_clicks, filename, mi_features_store):
     State("scatter-graph15", "figure"),  # Add the figure data
     State("file-selector-graph15", "value"),
     State("stored-files", "data"),
+    State("file-config-assignments-store", "data"),  # ADD THIS
+    State("configuration-profiles-store", "data"),  # ADD THIS
     prevent_initial_call=True,
 )
 def download_selected_points_graph15(
@@ -508,7 +513,9 @@ def download_selected_points_graph15(
     figure_data,
     selected_ids,
     stored_files,
-):
+    assignments_store,
+    profiles_store,
+):  # ADD PARAMETERS
     """Generate CSV file of selected points from Graph 1.5 for download."""
     if not n_clicks or not filename or not selectedData:
         raise dash.exceptions.PreventUpdate
@@ -519,20 +526,47 @@ def download_selected_points_graph15(
         # Process selected files to get the combined dataframe
         sampled_dfs = []
 
-        # This part is different from Graph 1 - need to build combined dataset
+        # Build combined dataset from selected files
         for f in stored_files:
             if f["id"] in selected_ids:
                 try:
                     df = pd.read_json(f["data"], orient="split")
                     is_selection = f.get("is_selection", False)
 
-                    df["file_label"] = f["filename"]  # Add file name as a label
+                    # Only calculate features for non-selection files that don't have them yet
+                    if not is_selection and not has_physics_features(df):
+                        profile_name = (
+                            assignments_store.get(f["filename"])
+                            if assignments_store
+                            else None
+                        )
 
-                    if not is_selection:
-                        # Calculate physics features
-                        df = calculate_physics_features(df)
+                        if (
+                            profile_name
+                            and profile_name != "none"
+                            and profiles_store
+                            and profile_name in profiles_store
+                        ):
+                            profile_config = profiles_store[profile_name]
+                            try:
+                                df = calculate_physics_features_with_profile(
+                                    df, profile_config
+                                )
+                            except Exception as e:
+                                print(
+                                    f"Error calculating features for {f['filename']}: {e}"
+                                )
+                                continue  # Skip this file
+                        else:
+                            print(
+                                f"Skipping {f['filename']} - no valid profile assigned"
+                            )
+                            continue  # Skip files without proper profile assignment
 
+                    # Add file label
+                    df["file_label"] = f["filename"]
                     sampled_dfs.append(df)
+
                 except Exception as e:
                     print(f"Error processing {f['filename']} for download: {str(e)}")
 
@@ -549,7 +583,7 @@ def download_selected_points_graph15(
             print(f"Features {x_feature} or {y_feature} not found in data")
             raise dash.exceptions.PreventUpdate
 
-        # Extract selected points using the coordinates - this is the key part
+        # Extract selected points using the coordinates
         selected_indices = []
 
         # Print debug info about selectedData
@@ -634,19 +668,15 @@ def download_selected_points_graph15(
         selected_df = combined_df.iloc[selected_indices].reset_index(drop=True)
 
         # Remove UMAP coordinates if they exist
-        if "UMAP1" in selected_df.columns:
-            selected_df = selected_df.drop(columns=["UMAP1"])
-        if "UMAP2" in selected_df.columns:
-            selected_df = selected_df.drop(columns=["UMAP2"])
-
-        # Remove file_label
-        if "file_label" in selected_df.columns:
-            selected_df = selected_df.drop(columns=["file_label"])
+        columns_to_drop = ["UMAP1", "UMAP2", "file_label"]
+        columns_to_drop = [col for col in columns_to_drop if col in selected_df.columns]
+        if columns_to_drop:
+            selected_df = selected_df.drop(columns=columns_to_drop)
 
         # Get only the particle momentum columns (original data format)
-        momentum_columns = [
-            col for col in selected_df.columns if col.startswith("particle_")
-        ]
+        momentum_columns = sorted(
+            [col for col in selected_df.columns if col.startswith("particle_")]
+        )
 
         # Convert to original format
         if (
@@ -676,6 +706,11 @@ def download_selected_points_graph15(
             for i, col in enumerate(momentum_columns):
                 if i < len(reverse_columns):
                     original_format_df[reverse_columns[i]] = selected_df[col]
+
+            # Also include other physics features if available
+            for col in selected_df.columns:
+                if not col.startswith("particle_"):
+                    original_format_df[col] = selected_df[col]
         else:
             # If we can't convert back exactly, just use what we have
             original_format_df = selected_df
@@ -684,7 +719,6 @@ def download_selected_points_graph15(
         print(f"Final export dataframe columns: {original_format_df.columns.tolist()}")
 
         # Return the dataframe as a CSV for download
-        # The key difference is we're only returning the download output here
         return dcc.send_data_frame(
             original_format_df.to_csv, f"{filename}.csv", index=False
         )
@@ -707,11 +741,21 @@ def download_selected_points_graph15(
     State("y-axis-feature-graph15", "value"),
     State("file-selector-graph15", "value"),
     State("stored-files", "data"),
+    State("file-config-assignments-store", "data"),  # ADD THIS
+    State("configuration-profiles-store", "data"),  # ADD THIS
     prevent_initial_call=True,
 )
 def download_selected_points_graph25(
-    n_clicks, filename, selectedData, x_feature, y_feature, selected_ids, stored_files
-):
+    n_clicks,
+    filename,
+    selectedData,
+    x_feature,
+    y_feature,
+    selected_ids,
+    stored_files,
+    assignments_store,
+    profiles_store,
+):  # ADD PARAMETERS
     """Generate CSV file of selected points from Graph 2.5 for download."""
     if not n_clicks or not filename or not selectedData:
         raise dash.exceptions.PreventUpdate
@@ -729,8 +773,35 @@ def download_selected_points_graph25(
                     df["file_label"] = f["filename"]  # Add file name as a label
 
                     if not is_selection:
-                        # Calculate physics features
-                        df = calculate_physics_features(df)
+                        # Check if physics features already exist
+                        if not has_physics_features(df):
+                            profile_name = (
+                                assignments_store.get(f["filename"])
+                                if assignments_store
+                                else None
+                            )
+
+                            if (
+                                profile_name
+                                and profile_name != "none"
+                                and profiles_store
+                                and profile_name in profiles_store
+                            ):
+                                profile_config = profiles_store[profile_name]
+                                try:
+                                    df = calculate_physics_features_with_profile(
+                                        df, profile_config
+                                    )
+                                except Exception as e:
+                                    print(
+                                        f"Error calculating features for {f['filename']}: {e}"
+                                    )
+                                    continue  # Skip this file
+                            else:
+                                print(
+                                    f"Skipping {f['filename']} - no valid profile assigned"
+                                )
+                                continue  # Skip files without proper profile assignment
 
                     sampled_dfs.append(df)
                 except Exception as e:
@@ -803,10 +874,11 @@ def download_selected_points_graph25(
         selected_df = combined_df.iloc[selected_indices].reset_index(drop=True)
 
         # Remove UMAP coordinates if they exist
-        if "UMAP1" in selected_df.columns:
-            selected_df = selected_df.drop(columns=["UMAP1"])
-        if "UMAP2" in selected_df.columns:
-            selected_df = selected_df.drop(columns=["UMAP2"])
+        columns_to_drop = [
+            col for col in ["UMAP1", "UMAP2"] if col in selected_df.columns
+        ]
+        if columns_to_drop:
+            selected_df = selected_df.drop(columns=columns_to_drop)
 
         # Keep file_label for reference but prepare for export
         export_df = selected_df.copy()
@@ -816,9 +888,9 @@ def download_selected_points_graph25(
             export_df = export_df.drop(columns=["file_label"])
 
         # Get only the particle momentum columns (original data format)
-        momentum_columns = [
-            col for col in export_df.columns if col.startswith("particle_")
-        ]
+        momentum_columns = sorted(
+            [col for col in export_df.columns if col.startswith("particle_")]
+        )
 
         # If we have the momentum columns, convert back to original format
         if (
@@ -877,9 +949,17 @@ def download_selected_points_graph25(
     Input("save-filtered-data-btn", "n_clicks"),
     State("filtered-data-filename", "value"),
     State("filtered-data-store", "data"),
+    State(
+        "file-config-assignments-store", "data"
+    ),  # ADD THIS (might be needed in future)
+    State(
+        "configuration-profiles-store", "data"
+    ),  # ADD THIS (might be needed in future)
     prevent_initial_call=True,
 )
-def download_filtered_data(n_clicks, filename, filtered_data_store):
+def download_filtered_data(
+    n_clicks, filename, filtered_data_store, assignments_store, profiles_store
+):  # ADD PARAMETERS
     """Generate CSV file of filtered data points for download."""
     if (
         not n_clicks
@@ -908,13 +988,15 @@ def download_filtered_data(n_clicks, filename, filtered_data_store):
             export_df = export_df.drop(columns=["file_label"])
 
         # Get only the particle momentum columns (original data format)
-        momentum_columns = [
-            col for col in export_df.columns if col.startswith("particle_")
-        ]
+        momentum_columns = sorted(
+            [col for col in export_df.columns if col.startswith("particle_")]
+        )
 
         # If we have the momentum columns, convert back to original format
         original_format_df = pd.DataFrame()
-        if momentum_columns and len(momentum_columns) == 15:
+        if (
+            momentum_columns and len(momentum_columns) == 15
+        ):  # Should be 5 particles x 3 dimensions
             # Create the reverse mapping from standardized to original column names
             reverse_columns = [
                 "Px_ion1",
@@ -940,12 +1022,28 @@ def download_filtered_data(n_clicks, filename, filtered_data_store):
                     original_format_df[reverse_columns[i]] = export_df[col]
 
             # Also include other physics features if available
-            for col in export_df.columns:
-                if not col.startswith("particle_"):
-                    original_format_df[col] = export_df[col]
+            physics_features = [
+                col for col in export_df.columns if not col.startswith("particle_")
+            ]
+            for col in physics_features:
+                original_format_df[col] = export_df[col]
         else:
             # If we can't convert back exactly, just use what we have
-            original_format_df = export_df
+            # but still try to put momentum columns first if they exist
+            if momentum_columns:
+                # Put momentum columns first, then other columns
+                other_columns = [
+                    col for col in export_df.columns if not col.startswith("particle_")
+                ]
+                column_order = momentum_columns + other_columns
+                original_format_df = export_df[column_order]
+            else:
+                original_format_df = export_df
+
+        # Ensure no duplicate columns
+        original_format_df = original_format_df.loc[
+            :, ~original_format_df.columns.duplicated()
+        ]
 
         # Return the dataframe as a CSV for download
         return (
@@ -960,7 +1058,7 @@ def download_filtered_data(n_clicks, filename, filtered_data_store):
         import traceback
 
         traceback.print_exc()
-        return None, f"Error saving filtered data: {str(e)}"
+        return dash.no_update, f"Error saving filtered data: {str(e)}"
 
 
 # Callback to download filtered UMAP data

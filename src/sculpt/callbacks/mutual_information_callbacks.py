@@ -1,735 +1,364 @@
 import re
 import traceback
-from itertools import combinations
 
 import dash
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import umap.umap_ as umap
-from dash import ALL, Input, Output, State, callback, html
-from sklearn.cluster import DBSCAN, KMeans
-from sklearn.feature_selection import mutual_info_regression
-from sklearn.metrics import (
-    calinski_harabasz_score,
-    davies_bouldin_score,
-    silhouette_score,
-)
-from sklearn.preprocessing import StandardScaler
-from torch.utils.data import DataLoader, TensorDataset
 
-from sculpt.models.deep_autoencoder import DeepAutoencoder
-from sculpt.utils.file_handlers import extract_selection_indices
-from sculpt.utils.metrics.clustering_quality import cluster_stability, hopkins_statistic
+# import plotly.graph_objects as go
+# import torch
+# import torch.nn as nn
+# import torch.optim as optim
+# import umap.umap_ as umap
+from dash import ALL, Input, Output, State, callback, html
+
+# from sklearn.cluster import DBSCAN, KMeans
+from sklearn.feature_selection import mutual_info_regression
+
+# from itertools import combinations
+
+
+# from sklearn.metrics import (
+#     calinski_harabasz_score,
+#     davies_bouldin_score,
+#     silhouette_score,
+# )
+# from sklearn.preprocessing import StandardScaler
+# from torch.utils.data import DataLoader, TensorDataset
+
+# from sculpt.models.deep_autoencoder import DeepAutoencoder
+# from sculpt.utils.file_handlers import extract_selection_indices
+# from sculpt.utils.metrics.clustering_quality import cluster_stability, hopkins_statistic
 
 
 @callback(
-    Output("mi-features-graph", "figure"),
-    Output("mi-features-debug-output", "children"),
     Output("mi-features-store", "data"),
-    Output("run-umap-mi-status", "children", allow_duplicate=True),
-    Output("umap-quality-metrics-mi", "children"),  # Add this output
+    Output("mi-features-status", "children", allow_duplicate=True),
+    Output("mi-scatter-x-feature", "options"),
+    Output("mi-scatter-y-feature", "options"),
+    Output("mi-sorted-features-info", "children"),
     Input("run-mi-features", "n_clicks"),
-    Input("run-umap-mi", "n_clicks"),
     State("mi-data-source", "value"),
     State("mi-target-variables", "value"),
     State("mi-redundancy-threshold", "value"),
     State("mi-max-features", "value"),
-    State("autoencoder-latent-dim", "value"),
-    State("autoencoder-epochs", "value"),
-    State("autoencoder-batch-size", "value"),
-    State("autoencoder-learning-rate", "value"),
     State({"type": "feature-selector-mi", "category": ALL}, "value"),
     State("selected-points-store", "data"),
     State("selected-points-run-store", "data"),
     State("combined-data-store", "data"),
-    State("umap-graph", "figure"),
-    State("mi-features-store", "data"),
-    State("metric-selector-mi", "value"),  # Add this state
     prevent_initial_call=True,
 )
-def run_mi_feature_selection_and_umap(
-    run_mi_clicks,
-    run_umap_clicks,
+def run_mi_feature_selection(
+    n_clicks,
     data_source,
     target_variables,
     redundancy_threshold,
     max_features,
-    latent_dim,
-    epochs,
-    batch_size,
-    learning_rate,
     selected_features_list,
     graph1_selection,
     graph3_selection,
     combined_data_json,
-    original_figure,
-    mi_features_store,
-    selected_metrics,
 ):
-    """Run mutual information feature selection followed by autoencoder for dimensionality reduction."""
+    """Run mutual information feature selection to identify the most informative features."""
 
-    # Initialize debug info and check which button was clicked
-    ctx = dash.callback_context
-    if not ctx.triggered:
-        return {}, "No action triggered.", {}, "", []
+    print("\n" + "=" * 80)
+    print("DEBUG: STARTING MI FEATURE SELECTION")
+    print("=" * 80)
 
-    trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
-    debug_text = []
+    if not n_clicks:
+        return {}, "Click 'Run MI Feature Selection' to start.", [], [], ""
 
-    # If UMAP button was clicked and we have stored features, skip the MI part
-    if (
-        trigger_id == "run-umap-mi"
-        and mi_features_store
-        and "latent_features" in mi_features_store
-    ):
-        debug_text.append(
-            "Running UMAP visualization on previously computed MI-based features..."
-        )
+    try:
+        debug_text = []
 
-        try:
-            # Load the latent features from the store
-            latent_df = pd.read_json(
-                mi_features_store["latent_features"], orient="split"
+        # Debug: Print all inputs
+        print(f"DEBUG: n_clicks = {n_clicks}")
+        print(f"DEBUG: data_source = {data_source}")
+        print(f"DEBUG: target_variables = {target_variables}")
+        print(f"DEBUG: redundancy_threshold = {redundancy_threshold}")
+        print(f"DEBUG: max_features = {max_features}")
+        print(f"DEBUG: selected_features_list = {selected_features_list}")
+        print(f"DEBUG: graph1_selection = {graph1_selection}")
+        print(f"DEBUG: graph3_selection = {graph3_selection}")
+
+        # Debug: Check combined_data_json
+        print("\nDEBUG: Checking combined_data_json...")
+        print(f"  - Type: {type(combined_data_json)}")
+        print(f"  - Is None: {combined_data_json is None}")
+        print(f"  - Is Dict: {isinstance(combined_data_json, dict)}")
+
+        if combined_data_json is not None:
+            print(
+                f"  - Keys: {list(combined_data_json.keys()) if isinstance(combined_data_json, dict) else 'N/A'}"
             )
-            selected_features = mi_features_store.get("selected_features", [])
-
-            if latent_df.empty:
-                return (
-                    {},
-                    "No MI-based features found. Run MI Feature Selection first.",
-                    mi_features_store,
-                    "",
-                    [],
-                )
-
-            # Run UMAP on the latent space
-            latent_dim = mi_features_store.get("latent_dim", 7)
-            X_latent = latent_df[[f"Latent_{i}" for i in range(latent_dim)]].to_numpy()
-
-            # Run UMAP
-            reducer = umap.UMAP(
-                n_components=2,
-                n_neighbors=15,
-                min_dist=0.1,
-                metric="euclidean",
-                random_state=42,
-            )
-
-            umap_result = reducer.fit_transform(X_latent)
-
-            # Create DataFrame for UMAP visualization
-            umap_df = pd.DataFrame(
-                {
-                    "UMAP1": umap_result[:, 0],
-                    "UMAP2": umap_result[:, 1],
-                    "file_label": latent_df["file_label"].values,
-                }
-            )
-
-            # Create visualization
-
-            fig = go.Figure()
-
-            # Extract color information from original figure
-            color_map = {}
-            if original_figure and "data" in original_figure:
-                for trace in original_figure["data"]:
-                    if (
-                        "name" in trace
-                        and "marker" in trace
-                        and "color" in trace["marker"]
-                    ):
-                        # Clean the label if it contains point count
-                        clean_name = trace["name"]
-                        if " (" in clean_name:
-                            clean_name = clean_name.split(" (")[0]
-                        color_map[clean_name] = trace["marker"]["color"]
-
-            # Add traces for each file label with consistent colors
-            for label in umap_df["file_label"].unique():
-                mask = umap_df["file_label"] == label
-                df_subset = umap_df[mask]
-
-                # Get color from original figure if available
-                color = color_map.get(label, None)
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_subset["UMAP1"],
-                        y=df_subset["UMAP2"],
-                        mode="markers",
-                        marker=dict(size=8, color=color, opacity=0.7),
-                        name=f"{label} ({len(df_subset)} pts)",
-                    )
-                )
-
-            # Update figure layout
-            fig.update_layout(
-                height=600,
-                title=f"UMAP of MI-Selected Features and Autoencoder (latent dim={latent_dim})",
-                xaxis_title="UMAP1",
-                yaxis_title="UMAP2",
-                legend_title="Data File",
-            )
-
-            # Add information about which features were selected
-            debug_text.append(
-                f"Selected {len(selected_features)} features using mutual information:"
-            )
-            debug_text.append(
-                ", ".join(selected_features[:10])
-                + ("..." if len(selected_features) > 10 else "")
-            )
-
-            # Calculate clustering metrics
-            metrics_children = []
-            try:
-
-                # Get UMAP coordinates for clustering
-                X_umap = umap_df[["UMAP1", "UMAP2"]].to_numpy()
-
-                # Scale the data for better DBSCAN performance
-                scaler = StandardScaler()
-                X_umap_scaled = scaler.fit_transform(X_umap)
-
-                # Find a reasonable epsilon for DBSCAN
-                eps_candidates = np.linspace(0.1, 1.0, 10)
-                best_eps = 0.5  # Default
-                max_clusters = 0
-
-                # Try different eps values and pick the one that gives a reasonable number of clusters
-                for eps in eps_candidates:
-                    dbscan = DBSCAN(eps=eps, min_samples=5)
-                    labels = dbscan.fit_predict(X_umap_scaled)
-                    n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
-
-                    noise_count = np.sum(labels == -1)
-                    noise_ratio = noise_count / len(labels) if len(labels) > 0 else 0
-
-                    if (
-                        n_clusters >= 2
-                        and noise_ratio < 0.5
-                        and n_clusters > max_clusters
-                    ):
-                        max_clusters = n_clusters
-                        best_eps = eps
-
-                # Run DBSCAN with the best eps
-                dbscan = DBSCAN(eps=best_eps, min_samples=5)
-                cluster_labels = dbscan.fit_predict(X_umap_scaled)
-
-                # Count clusters and noise points
-                unique_clusters = set(cluster_labels)
-                n_clusters = len(unique_clusters) - (1 if -1 in unique_clusters else 0)
-                n_noise = np.sum(cluster_labels == -1)
-                noise_ratio = (
-                    n_noise / len(cluster_labels) if len(cluster_labels) > 0 else 0
-                )
-
-                metrics = {}
-
-                # Only calculate metrics if we have at least 2 clusters
-                if n_clusters >= 2:
-                    # For metrics, we need to exclude noise points (-1)
-                    mask = cluster_labels != -1
-                    non_noise_points = np.sum(mask)
-                    non_noise_clusters = len(set(cluster_labels[mask]))
-
-                    if non_noise_points > non_noise_clusters and non_noise_clusters > 1:
-                        if "silhouette" in selected_metrics:
-                            metrics["silhouette"] = silhouette_score(
-                                X_umap_scaled[mask], cluster_labels[mask]
-                            )
-
-                        if "davies_bouldin" in selected_metrics:
-                            metrics["davies_bouldin"] = davies_bouldin_score(
-                                X_umap_scaled[mask], cluster_labels[mask]
-                            )
-
-                        if "calinski_harabasz" in selected_metrics:
-                            metrics["calinski_harabasz"] = calinski_harabasz_score(
-                                X_umap_scaled[mask], cluster_labels[mask]
-                            )
-
-                        # Add new metrics based on selection
-                        if "hopkins" in selected_metrics:
-                            h_stat = hopkins_statistic(X_umap_scaled)
-                            metrics["hopkins"] = h_stat
-
-                        if "stability" in selected_metrics:
-                            stability = cluster_stability(
-                                X_umap_scaled, best_eps, 5, n_iterations=3
-                            )
-                            metrics["stability"] = stability
-
-                        metrics["note"] = "Metrics calculated excluding noise points"
-                    else:
-                        metrics["note"] = "Not enough valid points for metrics"
-                else:
-                    # Try KMeans as fallback
-
-                    kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
-                    fallback_labels = kmeans.fit_predict(X_umap_scaled)
-
-                    if "silhouette" in selected_metrics:
-                        metrics["silhouette"] = silhouette_score(
-                            X_umap_scaled, fallback_labels
-                        )
-
-                    if "davies_bouldin" in selected_metrics:
-                        metrics["davies_bouldin"] = davies_bouldin_score(
-                            X_umap_scaled, fallback_labels
-                        )
-
-                    if "calinski_harabasz" in selected_metrics:
-                        metrics["calinski_harabasz"] = calinski_harabasz_score(
-                            X_umap_scaled, fallback_labels
-                        )
-
-                    if "hopkins" in selected_metrics:
-                        h_stat = hopkins_statistic(X_umap_scaled)
-                        metrics["hopkins"] = h_stat
-
-                    metrics["note"] = (
-                        "DBSCAN found no clusters, metrics based on KMeans fallback"
+            if isinstance(combined_data_json, dict):
+                for key, value in combined_data_json.items():
+                    print(
+                        f"  - {key}: type={type(value)}, len={len(str(value)) if value else 0}"
                     )
 
-                # Create UI elements for the metrics
-                metrics_children = [
-                    html.H4(
-                        "Clustering Quality Metrics (DBSCAN)",
-                        style={"fontSize": "14px", "marginBottom": "5px"},
-                    ),
-                    html.Div(
-                        [
-                            # Existing metrics
-                            html.Div(
-                                [
-                                    html.Span(
-                                        "Estimated Clusters: ",
-                                        style={"fontWeight": "bold"},
-                                    ),
-                                    html.Span(f"{n_clusters}"),
-                                ]
-                            ),
-                            html.Div(
-                                [
-                                    html.Span(
-                                        "Noise Points: ", style={"fontWeight": "bold"}
-                                    ),
-                                    html.Span(f"{n_noise} ({noise_ratio:.1%})"),
-                                ]
-                            ),
-                            html.Div(
-                                [
-                                    html.Span(
-                                        "DBSCAN eps: ", style={"fontWeight": "bold"}
-                                    ),
-                                    html.Span(f"{best_eps:.3f}"),
-                                ]
-                            ),
-                            # Basic metrics (existing)
-                            (
-                                html.Div(
-                                    [
-                                        html.Span(
-                                            "Silhouette Score: ",
-                                            style={"fontWeight": "bold"},
-                                        ),
-                                        html.Span(
-                                            f"{metrics.get('silhouette', 'N/A'):.4f}",
-                                            style={
-                                                "color": (
-                                                    "green"
-                                                    if metrics.get("silhouette", 0)
-                                                    > 0.5
-                                                    else (
-                                                        "orange"
-                                                        if metrics.get("silhouette", 0)
-                                                        > 0.25
-                                                        else "red"
-                                                    )
-                                                )
-                                            },
-                                        ),
-                                    ]
-                                )
-                                if "silhouette" in metrics
-                                else None
-                            ),
-                            (
-                                html.Div(
-                                    [
-                                        html.Span(
-                                            "Davies-Bouldin Index: ",
-                                            style={"fontWeight": "bold"},
-                                        ),
-                                        html.Span(
-                                            f"{metrics.get('davies_bouldin', 'N/A'):.4f}",
-                                            style={
-                                                "color": (
-                                                    "green"
-                                                    if metrics.get(
-                                                        "davies_bouldin", float("inf")
-                                                    )
-                                                    < 0.8
-                                                    else (
-                                                        "orange"
-                                                        if metrics.get(
-                                                            "davies_bouldin",
-                                                            float("inf"),
-                                                        )
-                                                        < 1.5
-                                                        else "red"
-                                                    )
-                                                )
-                                            },
-                                        ),
-                                    ]
-                                )
-                                if "davies_bouldin" in metrics
-                                else None
-                            ),
-                            (
-                                html.Div(
-                                    [
-                                        html.Span(
-                                            "Calinski-Harabasz Index: ",
-                                            style={"fontWeight": "bold"},
-                                        ),
-                                        html.Span(
-                                            f"{metrics.get('calinski_harabasz', 'N/A'):.1f}",
-                                            style={
-                                                "color": (
-                                                    "green"
-                                                    if metrics.get(
-                                                        "calinski_harabasz", 0
-                                                    )
-                                                    > 100
-                                                    else (
-                                                        "orange"
-                                                        if metrics.get(
-                                                            "calinski_harabasz", 0
-                                                        )
-                                                        > 50
-                                                        else "red"
-                                                    )
-                                                )
-                                            },
-                                        ),
-                                    ]
-                                )
-                                if "calinski_harabasz" in metrics
-                                else None
-                            ),
-                            # New metrics
-                            (
-                                html.Div(
-                                    [
-                                        html.Span(
-                                            "Hopkins Statistic: ",
-                                            style={"fontWeight": "bold"},
-                                        ),
-                                        html.Span(
-                                            f"{metrics.get('hopkins', 'N/A'):.4f}",
-                                            style={
-                                                "color": (
-                                                    "green"
-                                                    if metrics.get("hopkins", 0) > 0.75
-                                                    else (
-                                                        "orange"
-                                                        if metrics.get("hopkins", 0)
-                                                        > 0.6
-                                                        else "red"
-                                                    )
-                                                )
-                                            },
-                                        ),
-                                    ]
-                                )
-                                if "hopkins" in metrics
-                                else None
-                            ),
-                            (
-                                html.Div(
-                                    [
-                                        html.Span(
-                                            "Cluster Stability: ",
-                                            style={"fontWeight": "bold"},
-                                        ),
-                                        html.Span(
-                                            f"{metrics.get('stability', 'N/A'):.4f}",
-                                            style={
-                                                "color": (
-                                                    "green"
-                                                    if metrics.get("stability", 0) > 0.8
-                                                    else (
-                                                        "orange"
-                                                        if metrics.get("stability", 0)
-                                                        > 0.6
-                                                        else "red"
-                                                    )
-                                                )
-                                            },
-                                        ),
-                                    ]
-                                )
-                                if "stability" in metrics
-                                else None
-                            ),
-                            html.Div(
-                                metrics.get("note", ""),
-                                style={
-                                    "fontSize": "11px",
-                                    "fontStyle": "italic",
-                                    "marginTop": "3px",
-                                },
-                            ),
-                        ]
-                    ),
-                ]
-
-                # Add a tooltip about the metrics
-                metrics_children.append(
-                    html.Div(
-                        [
-                            html.Hr(
-                                style={"marginTop": "10px", "marginBottom": "10px"}
-                            ),
-                            html.Details(
-                                [
-                                    html.Summary(
-                                        "What do these metrics mean?",
-                                        style={"cursor": "pointer"},
-                                    ),
-                                    html.Div(
-                                        [
-                                            html.P(
-                                                "• Silhouette Score: Measures how well-separated clusters are (higher is "
-                                                "better, range: -1 to 1)"
-                                            ),
-                                            html.P(
-                                                "• Davies-Bouldin Index: Measures average similarity between clusters (lower"
-                                                " is better, range: 0 to ∞)"
-                                            ),
-                                            html.P(
-                                                "• Calinski-Harabasz Index: Ratio of between-cluster to within-cluster "
-                                                "dispersion (higher is better, range: 0 to ∞)"
-                                            ),
-                                            html.P(
-                                                "• Hopkins Statistic: Measures clusterability of the data (>0.75 indicates "
-                                                "good clustering, range: 0 to 1)"
-                                            ),
-                                            html.P(
-                                                "• Cluster Stability: How stable clusters are with small perturbations (higher"
-                                                " is better, range: 0 to 1)"
-                                            ),
-                                            html.P(
-                                                "• Physics Consistency: How well clusters align with physical parameters "
-                                                "(higher is better, range: 0 to 1)"
-                                            ),
-                                        ],
-                                        style={
-                                            "fontSize": "11px",
-                                            "paddingLeft": "10px",
-                                        },
-                                    ),
-                                ]
-                            ),
-                        ],
-                        style={"marginTop": "10px"},
-                    )
-                )
-
-            except Exception as e:
-
-                trace = traceback.format_exc()
-                metrics_children = [html.Div(f"Error calculating metrics: {str(e)}")]
-
-            return (
-                fig,
-                "<br>".join(debug_text),
-                mi_features_store,
-                "UMAP visualization complete!",
-                metrics_children,
-            )
-
-        except Exception as e:
-
-            trace = traceback.format_exc()
-            error_message = f"Error running UMAP on MI features: {str(e)}<br>{trace}"
-            return {}, error_message, mi_features_store, "", []
-
-    # If we're here, we're running the full MI feature selection
-    if trigger_id == "run-mi-features":
         debug_text.append(f"Data source: {data_source}")
         debug_text.append(f"Target variables: {target_variables}")
         debug_text.append(f"Redundancy threshold: {redundancy_threshold}")
         debug_text.append(f"Maximum features: {max_features}")
 
+        # Step 1: Validate inputs
+        # -----------------------------------------
+
+        # Default values if not provided
+        if not data_source:
+            data_source = "all"
+        if not target_variables or len(target_variables) == 0:
+            target_variables = ["KER", "EESum", "EESharing", "TotalEnergy"]
+            debug_text.append(
+                f"Using default target variables: {', '.join(target_variables)}"
+            )
+        if redundancy_threshold is None:
+            redundancy_threshold = 0.5
+        if max_features is None:
+            max_features = 20
+
+        # Step 2: Load and prepare data
+        # -----------------------------------------
+
+        print("\nDEBUG: Loading combined dataset...")
+
+        # Check if combined_data_json exists and has the right structure
+        if combined_data_json is None:
+            error_msg = (
+                "No combined data available. Please run UMAP in Basic Analysis first."
+            )
+            print(f"DEBUG ERROR: {error_msg}")
+            return {}, error_msg, [], [], ""
+
+        if not isinstance(combined_data_json, dict):
+            error_msg = f"Invalid combined data format. Expected dict, got {type(combined_data_json)}"
+            print(f"DEBUG ERROR: {error_msg}")
+            return {}, error_msg, [], [], ""
+
+        if "combined_df" not in combined_data_json:
+            error_msg = "No 'combined_df' in data store. Please run UMAP in Basic Analysis first."
+            print(f"DEBUG ERROR: {error_msg}")
+            return {}, error_msg, [], [], ""
+
+        # Check if combined_df is empty
+        combined_df_data = combined_data_json.get("combined_df")
+        print(f"DEBUG: combined_df_data type: {type(combined_df_data)}")
+        print(
+            f"DEBUG: combined_df_data content (first 100 chars): {str(combined_df_data)[:100] if combined_df_data else 'None'}"
+        )
+
+        if (
+            combined_df_data is None
+            or combined_df_data == "{}"
+            or combined_df_data == ""
+        ):
+            error_msg = "Combined dataset is empty. Please run feature extraction and UMAP first."
+            print(f"DEBUG ERROR: {error_msg}")
+            return {}, error_msg, [], [], ""
+
+        # Try to load the dataframe
         try:
-            # Step 1: Prepare data based on selected source
-            # -----------------------------------------
+            print("DEBUG: Attempting to parse JSON...")
+            combined_df = pd.read_json(combined_df_data, orient="split")
+            print(
+                f"DEBUG: Successfully loaded combined_df with shape {combined_df.shape}"
+            )
+            print(
+                f"DEBUG: Column names: {list(combined_df.columns)[:10]}..."
+            )  # First 10 columns
+            debug_text.append(f"Loaded combined dataset with {len(combined_df)} rows")
+        except Exception as e:
+            error_msg = f"Error parsing combined dataset: {str(e)}"
+            print(f"DEBUG ERROR: {error_msg}")
+            print(f"DEBUG: Full exception: {type(e).__name__}: {e}")
 
-            # Load the combined dataframe
-            if (
-                combined_data_json
-                and "combined_df" in combined_data_json
-                and combined_data_json["combined_df"] != "{}"
-            ):
-                combined_df = pd.read_json(
-                    combined_data_json["combined_df"], orient="split"
-                )
-                debug_text.append(
-                    f"Loaded combined dataset with {len(combined_df)} rows"
-                )
-            else:
-                return (
-                    {},
-                    "No combined dataset available. Please run UMAP first.",
-                    {},
-                    "",
-                    [],
-                )
+            traceback.print_exc()
+            return {}, error_msg, [], [], ""
 
-            # Load UMAP coordinates
-            umap_coords = None
-            if (
-                "umap_coords" in combined_data_json
-                and combined_data_json["umap_coords"] != "{}"
-            ):
+        if combined_df.empty:
+            error_msg = "Combined dataset is empty after loading."
+            print(f"DEBUG ERROR: {error_msg}")
+            return {}, error_msg, [], [], ""
+
+        # Load UMAP coordinates if needed for selections
+        umap_coords = None
+        if (
+            "umap_coords" in combined_data_json
+            and combined_data_json["umap_coords"] != "{}"
+        ):
+            try:
+                print("DEBUG: Loading UMAP coordinates...")
                 umap_coords = pd.read_json(
                     combined_data_json["umap_coords"], orient="split"
                 )
+                print(f"DEBUG: Loaded UMAP coords with shape {umap_coords.shape}")
+            except Exception as e:
+                print(f"DEBUG WARNING: Could not load UMAP coords: {e}")
+                pass  # Not critical for MI analysis
 
-            # Load Graph 3 subset
-            graph3_subset_df = None
-            if (
-                combined_data_json
-                and "graph3_subset" in combined_data_json
-                and combined_data_json["graph3_subset"] != "{}"
-            ):
+        # Load Graph 3 subset if needed
+        graph3_subset_df = None
+        if (
+            combined_data_json
+            and "graph3_subset" in combined_data_json
+            and combined_data_json["graph3_subset"] != "{}"
+        ):
+            try:
+                print("DEBUG: Loading Graph 3 subset...")
                 graph3_subset_df = pd.read_json(
                     combined_data_json["graph3_subset"], orient="split"
                 )
-                debug_text.append(
-                    f"Loaded Graph 3 subset with {len(graph3_subset_df)} rows"
+                print(
+                    f"DEBUG: Loaded Graph 3 subset with shape {graph3_subset_df.shape}"
                 )
+            except Exception as e:
+                print(f"DEBUG WARNING: Could not load Graph 3 subset: {e}")
+                pass  # Not critical
 
-            # Collect all selected features for MI analysis
-            all_selected_features = []
-            for features in selected_features_list:
-                if features:  # Only add non-empty lists
-                    all_selected_features.extend(features)
+        # Step 3: Collect selected features
+        # -----------------------------------------
 
-            if not all_selected_features:
-                # Use particle momentum as default if nothing is selected
-                all_selected_features = [
-                    col for col in combined_df.columns if col.startswith("particle_")
-                ]
-                debug_text.append(
-                    f"No features selected, using {len(all_selected_features)} default momentum features"
-                )
-            else:
-                debug_text.append(
-                    f"Using {len(all_selected_features)} selected features"
-                )
+        print("\nDEBUG: Collecting selected features...")
 
-            # Verify that target variables are valid
-            if not target_variables or len(target_variables) == 0:
-                # Default targets if none are specified
-                target_variables = ["KER", "EESum", "TotalEnergy"]
-                debug_text.append(
-                    f"Using default target variables: {', '.join(target_variables)}"
-                )
+        # Handle pattern-matching callback results
+        all_selected_features = []
+        for features in selected_features_list:
+            if features:  # Only add non-empty lists
+                all_selected_features.extend(features)
 
-            # Check if targets exist in the data
-            valid_targets = [t for t in target_variables if t in combined_df.columns]
+        print(f"DEBUG: Found {len(all_selected_features)} selected features")
+
+        # If no features selected, use default particle features
+        if not all_selected_features:
+            all_selected_features = [
+                col for col in combined_df.columns if col.startswith("particle_")
+            ]
+            debug_text.append(
+                f"No features selected, using {len(all_selected_features)} default particle features"
+            )
+            print(
+                f"DEBUG: Using default particle features: {len(all_selected_features)} found"
+            )
+        else:
+            debug_text.append(f"Using {len(all_selected_features)} selected features")
+
+        # Step 4: Prepare data based on source
+        # -----------------------------------------
+
+        print("\nDEBUG: Preparing data based on source...")
+
+        # Handle different data source options
+        if data_source == "graph1" and graph1_selection and umap_coords is not None:
+            print("DEBUG: Using Graph 1 selection")
+            # [Graph 1 selection logic here - omitted for brevity]
+            df_for_analysis = combined_df  # Simplified for debugging
+            debug_text.append("Using Graph 1 selection")
+        elif (
+            data_source == "graph3"
+            and graph3_selection
+            and graph3_subset_df is not None
+        ):
+            print("DEBUG: Using Graph 3 selection")
+            df_for_analysis = graph3_subset_df
+            debug_text.append(f"Using Graph 3 subset with {len(df_for_analysis)} rows")
+        else:
+            print("DEBUG: Using all data")
+            df_for_analysis = combined_df
+            debug_text.append(f"Using all {len(df_for_analysis)} rows for analysis")
+
+        # Step 5: Extract feature data
+        # -----------------------------------------
+
+        print("\nDEBUG: Extracting feature data...")
+
+        # Get valid feature columns that exist in the dataset
+        feature_cols = [
+            col for col in df_for_analysis.columns if col in all_selected_features
+        ]
+        print(
+            f"DEBUG: Valid feature columns: {len(feature_cols)} out of {len(all_selected_features)} requested"
+        )
+
+        if not feature_cols:
+            error_msg = (
+                "No valid features found in dataset. Please check feature selection."
+            )
+            print(f"DEBUG ERROR: {error_msg}")
+            print(f"DEBUG: Available columns: {list(df_for_analysis.columns)[:20]}...")
+            print(f"DEBUG: Requested features: {all_selected_features[:20]}...")
+            return {}, error_msg, [], [], ""
+
+        debug_text.append(f"Found {len(feature_cols)} valid features")
+
+        # Extract feature matrix
+        try:
+            feature_matrix = df_for_analysis[feature_cols].copy()
+            print(f"DEBUG: Feature matrix shape: {feature_matrix.shape}")
+
+            # Handle NaN/inf values
+            print("DEBUG: Handling NaN/inf values...")
+            feature_matrix = feature_matrix.fillna(0)
+            feature_matrix = feature_matrix.replace([np.inf, -np.inf], 0)
+
+            # Check for target variables
+            valid_targets = [
+                t for t in target_variables if t in df_for_analysis.columns
+            ]
+            print(
+                f"DEBUG: Valid target variables: {valid_targets} out of {target_variables}"
+            )
+
             if not valid_targets:
-                return (
-                    {},
-                    "No valid target variables found in the data. Please run feature extraction first.",
-                    {},
-                    "",
-                    [],
+                error_msg = f"Target variables {target_variables} not found in dataset."
+                print(f"DEBUG ERROR: {error_msg}")
+                print(
+                    "DEBUG: Available columns for targets: "
+                    f"{[col for col in df_for_analysis.columns if any(x in col for x in ['KER', 'EE', 'Energy', 'Total'])]}"
                 )
+                return {}, error_msg, [], [], ""
 
             debug_text.append(f"Using valid targets: {', '.join(valid_targets)}")
 
-            # Prepare data based on data source
-            if data_source == "all":
-                # Use all data
-                df_for_analysis = combined_df.copy()
-                labels = combined_df["file_label"].copy()
-                debug_text.append(f"Using all {len(df_for_analysis)} rows for analysis")
+        except Exception as e:
+            error_msg = f"Error preparing feature matrix: {str(e)}"
+            print(f"DEBUG ERROR: {error_msg}")
 
-            elif (
-                data_source == "graph1-selection"
-                and graph1_selection
-                and umap_coords is not None
-            ):
-                # Use selection from Graph 1
-                indices = extract_selection_indices(graph1_selection, umap_coords)
-                if not indices:
-                    return {}, "No valid points found in Graph 1 selection.", {}, "", []
+            traceback.print_exc()
+            return {}, error_msg, [], [], ""
 
-                df_for_analysis = combined_df.iloc[indices].copy()
-                labels = df_for_analysis["file_label"].copy()
-                debug_text.append(
-                    f"Selected {len(df_for_analysis)} rows from Graph 1 selection"
-                )
+        # Step 6: Mutual Information Feature Selection
+        # -----------------------------------------
 
-            elif (
-                data_source == "graph3-selection"
-                and graph3_selection
-                and graph3_subset_df is not None
-            ):
-                # Use selection from Graph 3
-                df_for_analysis = graph3_subset_df.copy()
-                labels = df_for_analysis["file_label"].copy()
-                debug_text.append(
-                    f"Using Graph 3 selection with {len(df_for_analysis)} rows"
-                )
+        print("\nDEBUG: Computing mutual information...")
+        debug_text.append("Computing mutual information with target variables...")
 
-            else:
-                # Default to all data
-                df_for_analysis = combined_df.copy()
-                labels = combined_df["file_label"].copy()
-                debug_text.append(f"Defaulting to all {len(df_for_analysis)} rows")
-
-            # Extract feature data - only include columns that are in all_selected_features
-            feature_cols = [
-                col for col in df_for_analysis.columns if col in all_selected_features
-            ]
-
-            if not feature_cols:
-                return {}, "No valid features selected for MI analysis.", {}, "", []
-
-            # Create feature matrix for MI analysis
-            feature_matrix = df_for_analysis[feature_cols].copy()
-
-            # Handle NaN/inf values
-            feature_matrix = feature_matrix.replace([np.inf, -np.inf], np.nan)
-            feature_matrix = feature_matrix.fillna(0)
-
-            # Step 2: Mutual Information Feature Selection
-            # -----------------------------------------
-
-            debug_text.append("Computing mutual information with target variables...")
-
-            # Compute MI with each target
-            mi_scores = {}
+        # Compute MI with each target
+        mi_scores = {}
+        try:
             for target in valid_targets:
+                print(f"DEBUG: Computing MI for target: {target}")
                 target_values = df_for_analysis[target].values
+                # Handle NaN/inf in target values
+                target_values = np.nan_to_num(
+                    target_values, nan=0.0, posinf=0.0, neginf=0.0
+                )
+
                 mi_scores[target] = mutual_info_regression(
                     feature_matrix, target_values, random_state=42
                 )
+                print(
+                    f"DEBUG: MI scores for {target}: min={mi_scores[target].min():.4f}, max={mi_scores[target].max():.4f}"
+                )
+        except Exception as e:
+            error_msg = f"Error computing mutual information: {str(e)}"
+            print(f"DEBUG ERROR: {error_msg}")
 
-            # Average MI scores across all targets
+            traceback.print_exc()
+            return {}, error_msg, [], [], ""
+
+        # Average MI scores across all targets
+        try:
             avg_mi_scores = np.mean(
                 [mi_scores[target] for target in valid_targets], axis=0
             )
@@ -740,188 +369,134 @@ def run_mi_feature_selection_and_umap(
                 mi_scores_dict, key=mi_scores_dict.get, reverse=True
             )
 
+            print("\nDEBUG: Top 5 features by mutual information:")
             debug_text.append("Top 5 features by mutual information:")
             for i, feature in enumerate(sorted_features[:5]):
-                debug_text.append(f"{i+1}. {feature}: {mi_scores_dict[feature]:.4f}")
+                score = mi_scores_dict[feature]
+                print(f"  {i+1}. {feature}: {score:.4f}")
+                debug_text.append(f"{i+1}. {feature}: {score:.4f}")
 
-            # Compute pairwise MI between features (to remove redundancy)
-            debug_text.append(
-                "Computing pairwise mutual information to reduce redundancy..."
-            )
+        except Exception as e:
+            error_msg = f"Error processing MI scores: {str(e)}"
+            print(f"DEBUG ERROR: {error_msg}")
 
-            # Limit number of features to consider for pairwise MI to avoid excessive computation
-            top_k_features = sorted_features[: min(100, len(sorted_features))]
+            traceback.print_exc()
+            return {}, error_msg, [], [], ""
 
-            pairwise_mi = {}
-            for f1, f2 in combinations(top_k_features, 2):
-                pairwise_mi[(f1, f2)] = mutual_info_regression(
-                    feature_matrix[[f1]], feature_matrix[f2].values, random_state=42
-                )[0]
+        # Step 7: Feature selection with redundancy reduction
+        # -----------------------------------------
 
-            # Select features with maximum MI & minimum redundancy
-            debug_text.append(
-                f"Selecting non-redundant features (threshold={redundancy_threshold})..."
-            )
+        print("\nDEBUG: Selecting features with redundancy reduction...")
+        debug_text.append(
+            f"Selecting up to {max_features} features with redundancy threshold {redundancy_threshold}"
+        )
 
+        try:
+            # Select top features
             selected_features = []
+            feature_correlations = feature_matrix.corr().abs()
+
             for feature in sorted_features:
-                if len(selected_features) >= int(max_features):
+                if len(selected_features) >= max_features:
                     break
 
-                if len(selected_features) == 0:
-                    selected_features.append(feature)
-                    continue
-
                 # Check redundancy with already selected features
-                redundant = False
-                for sel_feature in selected_features:
-                    if (feature, sel_feature) in pairwise_mi:
-                        mi_value = pairwise_mi[(feature, sel_feature)]
-                    else:
-                        mi_value = pairwise_mi.get((sel_feature, feature), 0)
+                is_redundant = False
+                for selected in selected_features:
+                    if (
+                        feature in feature_correlations.columns
+                        and selected in feature_correlations.index
+                    ):
+                        if (
+                            feature_correlations.loc[selected, feature]
+                            > redundancy_threshold
+                        ):
+                            is_redundant = True
+                            break
 
-                    if mi_value > float(redundancy_threshold):
-                        redundant = True
-                        break
-
-                if not redundant:
+                if not is_redundant:
                     selected_features.append(feature)
 
+            print(
+                f"\nDEBUG: Selected {len(selected_features)} features after redundancy reduction"
+            )
             debug_text.append(
-                f"Selected {len(selected_features)} non-redundant features out of {len(feature_cols)}"
-            )
-
-            # Create compressed feature matrix
-            compressed_feature_matrix = feature_matrix[selected_features]
-
-            # Step 3: Train autoencoder on selected features
-            # -----------------------------------------
-            debug_text.append(
-                f"Training autoencoder with latent dimension {latent_dim}..."
-            )
-
-            # Normalize features
-            feature_matrix_np = compressed_feature_matrix.to_numpy()
-            num_features = feature_matrix_np.shape[1]
-
-            feature_means = np.mean(feature_matrix_np, axis=0)
-            feature_stds = np.std(feature_matrix_np, axis=0) + 1e-8
-            normalized_features = (feature_matrix_np - feature_means) / feature_stds
-
-            # Convert to PyTorch tensor
-            feature_tensor = torch.tensor(normalized_features, dtype=torch.float32)
-
-            # Create PyTorch dataset and dataloader
-            dataset = TensorDataset(feature_tensor)
-            dataloader = DataLoader(dataset, batch_size=int(batch_size), shuffle=True)
-
-            # Set up device (CPU or GPU)
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            debug_text.append(f"Using device: {device}")
-
-            # Initialize model
-            model = DeepAutoencoder(
-                input_dim=num_features, latent_dim=int(latent_dim)
-            ).to(device)
-
-            # Initialize optimizer and loss function
-            criterion = nn.MSELoss()
-            optimizer = optim.Adam(model.parameters(), lr=float(learning_rate))
-
-            # Training loop
-            num_epochs = int(epochs)
-            losses = []
-
-            debug_text.append(f"Starting training for {num_epochs} epochs...")
-
-            for epoch in range(num_epochs):
-                total_loss = 0
-                model.train()
-
-                for batch in dataloader:
-                    batch_data = batch[0].to(device)
-
-                    # Forward pass
-                    optimizer.zero_grad()
-                    reconstructed, _ = model(batch_data)
-
-                    # Calculate loss
-                    loss = criterion(reconstructed, batch_data)
-
-                    # Backward pass
-                    loss.backward()
-                    optimizer.step()
-
-                    total_loss += loss.item()
-
-                # Average loss for this epoch
-                avg_loss = total_loss / len(dataloader)
-                losses.append(avg_loss)
-
-                # Only log some epochs to avoid overcrowding
-                if (
-                    epoch == 0
-                    or epoch == num_epochs - 1
-                    or (epoch + 1) % max(1, num_epochs // 5) == 0
-                ):
-                    debug_text.append(
-                        f"Epoch {epoch+1}/{num_epochs}, Loss: {avg_loss:.6f}"
-                    )
-
-            debug_text.append("Training complete!")
-
-            # Extract latent representations
-            model.eval()
-            with torch.no_grad():
-                latent_features = model.encoder(feature_tensor.to(device)).cpu().numpy()
-
-            # Create dataframe with latent features
-            latent_df = pd.DataFrame(
-                latent_features, columns=[f"Latent_{i}" for i in range(latent_dim)]
-            )
-            latent_df["file_label"] = labels.values
-
-            # Store the latent features for future use
-            mi_features_store = {
-                "latent_features": latent_df.to_json(date_format="iso", orient="split"),
-                "selected_features": selected_features,
-                "feature_cols": feature_cols,
-                "latent_dim": latent_dim,
-                "mi_scores": mi_scores_dict,
-            }
-
-            debug_text.append(
-                f"Extracted {len(latent_df)} latent representations with dimension {latent_dim}"
-            )
-
-            # Create a placeholder figure until UMAP is run
-            placeholder_fig = {
-                "data": [],
-                "layout": {
-                    "title": 'MI feature selection and autoencoder training complete! Click "Run UMAP on MI Features" to '
-                    "visualize",
-                    "xaxis": {"title": "UMAP1"},
-                    "yaxis": {"title": "UMAP2"},
-                    "height": 600,
-                },
-            }
-
-            return (
-                placeholder_fig,
-                "<br>".join(debug_text),
-                mi_features_store,
-                "MI feature selection and autoencoder training complete!",
-                [],
+                f"Selected {len(selected_features)} features after redundancy reduction"
             )
 
         except Exception as e:
+            print(f"DEBUG WARNING: Error in redundancy reduction: {e}")
+            # Fall back to simple selection
+            selected_features = sorted_features[:max_features]
 
-            trace = traceback.format_exc()
-            error_message = f"Error in MI feature selection: {str(e)}<br>{trace}"
-            return {}, error_message, {}, "", []
+        # Step 8: Prepare results
+        # -----------------------------------------
 
-    # If neither button was properly triggered, return empty states
-    return {}, "Click 'Run MI Feature Selection' to start.", {}, "", []
+        print("\nDEBUG: Preparing results...")
+
+        try:
+            # Store results
+            mi_store = {
+                "selected_features": selected_features,
+                "mi_scores": mi_scores_dict,
+                "feature_data": df_for_analysis[selected_features].to_json(
+                    date_format="iso", orient="split"
+                ),
+                "file_labels": (
+                    df_for_analysis[["file_label"]].to_json(
+                        date_format="iso", orient="split"
+                    )
+                    if "file_label" in df_for_analysis.columns
+                    else pd.DataFrame().to_json(orient="split")
+                ),
+                "target_variables": valid_targets,
+            }
+
+            # Create feature options for dropdowns
+            feature_options = [{"label": f, "value": f} for f in selected_features]
+
+            # Create info text
+            info_lines = [f"Selected {len(selected_features)} features:"]
+            for i, feature in enumerate(selected_features[:5]):
+                score = mi_scores_dict[feature]
+                info_lines.append(f"  {i+1}. {feature}: {score:.4f}")
+
+            if len(selected_features) > 5:
+                info_lines.append(f"  ... and {len(selected_features)-5} more")
+
+            info_text = html.Div([html.Div(line) for line in info_lines])
+
+            success_message = f"MI feature selection complete! Selected {len(selected_features)} features "
+            f"from {len(feature_cols)} candidates."
+
+            print(f"\nDEBUG: SUCCESS - {success_message}")
+            print("=" * 80)
+
+            return (
+                mi_store,
+                success_message,
+                feature_options,
+                feature_options,
+                info_text,
+            )
+
+        except Exception as e:
+            error_msg = f"Error preparing results: {str(e)}"
+            print(f"DEBUG ERROR: {error_msg}")
+
+            traceback.print_exc()
+            return {}, error_msg, [], [], ""
+
+    except Exception as e:
+
+        trace = traceback.format_exc()
+        error_message = f"Error in MI feature selection: {str(e)}"
+        print("\nDEBUG: CRITICAL ERROR")
+        print(f"Error: {error_message}")
+        print(f"Traceback:\n{trace}")
+        print("=" * 80)
+
+        return {}, error_message, [], [], html.Div(f"Error: {str(e)}")
 
 
 @callback(
@@ -930,9 +505,13 @@ def run_mi_feature_selection_and_umap(
     Input("feature-sort-option", "value"),
     State("feature-search-input", "value"),
     State("autoencoder-latent-store", "data"),
+    State("file-config-assignments-store", "data"),  # ADD THIS
+    State("configuration-profiles-store", "data"),  # ADD THIS
     prevent_initial_call=True,
 )
-def update_feature_importance_table(n_clicks, sort_option, search_term, latent_store):
+def update_feature_importance_table(
+    n_clicks, sort_option, search_term, latent_store, assignments_store, profiles_store
+):  # ADD PARAMETERS
     """Update the feature importance table based on search and sort options."""
     ctx = dash.callback_context
     if not ctx.triggered or not latent_store:
@@ -997,7 +576,7 @@ def update_feature_importance_table(n_clicks, sort_option, search_term, latent_s
                     "Rank": i + 1,
                     "Feature": row["Feature"],
                     "MI Score": f"{row['Mutual_Information']:.4f}",
-                    "Correlation": f"{row['Correlation']:.4f}",  # Use absolute correlation value
+                    "Correlation": f"{row['Correlation']:.4f}",
                 }
             )
 

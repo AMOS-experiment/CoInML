@@ -133,6 +133,7 @@ def physics_cluster_consistency(df, cluster_labels):
     physics_features = [
         "KER",
         "EESum",
+        "EEsharing",
         "energy_ion1",
         "energy_ion2",
         "energy_electron1",

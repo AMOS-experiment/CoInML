@@ -298,8 +298,11 @@ def create_confidence_bar(score, color):
 
 
 def create_feature_categories_ui(feature_columns, id_prefix):
-    """Create the feature selection UI organized by categories."""
-    # Group features into categories
+    """Create the feature selection UI organized by categories with Select All/None buttons."""
+    if not feature_columns:
+        return [html.Div("No features available.", style={"color": "gray"})]
+
+    # Group features into categories with all the new feature types
     feature_categories = {
         "Original Momentum": [
             col for col in feature_columns if col.startswith("particle_")
@@ -316,23 +319,91 @@ def create_feature_categories_ui(feature_columns, id_prefix):
         "Angles": [
             col
             for col in feature_columns
-            if any(x in col for x in ["theta_", "phi_", "angle_"])
+            if any(x in col for x in ["theta_", "phi_", "angle_", "relative_angle_"])
         ],
         "Dot Products": [col for col in feature_columns if "dot_product" in col],
+        "Cosine Similarities": [
+            col for col in feature_columns if "cosine_similarity" in col
+        ],
         "Differences": [
             col
             for col in feature_columns
-            if any(x in col for x in ["diff_", "mom_diff"])
+            if any(
+                x in col
+                for x in [
+                    "diff_",
+                    "mom_diff",
+                    "momentum_diff",
+                    "phi_diff",
+                    "theta_diff",
+                ]
+            )
+        ],
+        "Ratios": [
+            col
+            for col in feature_columns
+            if any(x in col for x in ["phi_rel", "theta_rel"])
         ],
     }
 
+    # Add Select All/None buttons at the top
+    feature_selection_ui = [
+        html.Div(
+            [
+                html.Button(
+                    "Select All",
+                    id={"type": f"select-all-btn-{id_prefix}", "index": "all"},
+                    className="btn-small",
+                    style={"marginRight": "10px", "marginBottom": "10px"},
+                ),
+                html.Button(
+                    "Select None",
+                    id={"type": f"select-none-btn-{id_prefix}", "index": "all"},
+                    className="btn-small",
+                    style={"marginBottom": "10px"},
+                ),
+            ],
+            style={"marginBottom": "15px"},
+        )
+    ]
+
     # Create the selection UI with feature categories
-    feature_selection_ui = []
     for category, cols in feature_categories.items():
         if cols:  # Only add categories that have features
             category_ui = html.Div(
                 [
-                    html.Div(category, className="feature-category-title"),
+                    html.Div(
+                        [
+                            html.Span(
+                                category,
+                                style={"fontWeight": "bold", "marginRight": "10px"},
+                            ),
+                            html.Button(
+                                "All",
+                                id={
+                                    "type": f"select-all-btn-{id_prefix}",
+                                    "index": category,
+                                },
+                                className="btn-tiny",
+                                style={
+                                    "marginRight": "5px",
+                                    "fontSize": "11px",
+                                    "padding": "2px 8px",
+                                },
+                            ),
+                            html.Button(
+                                "None",
+                                id={
+                                    "type": f"select-none-btn-{id_prefix}",
+                                    "index": category,
+                                },
+                                className="btn-tiny",
+                                style={"fontSize": "11px", "padding": "2px 8px"},
+                            ),
+                        ],
+                        className="feature-category-title",
+                        style={"marginBottom": "5px"},
+                    ),
                     dcc.Checklist(
                         id={
                             "type": f"feature-selector-{id_prefix}",
@@ -340,18 +411,17 @@ def create_feature_categories_ui(feature_columns, id_prefix):
                         },
                         options=[{"label": col, "value": col} for col in cols],
                         value=[],  # No default selection
-                        labelStyle={"display": "block"},
+                        labelStyle={"display": "block", "fontSize": "12px"},
                     ),
                 ],
                 className="feature-category",
+                style={"marginBottom": "10px"},
             )
             feature_selection_ui.append(category_ui)
 
-    if not feature_selection_ui:
+    if len(feature_selection_ui) == 1:  # Only has the select all/none buttons
         feature_selection_ui = [
-            html.Div(
-                "No features available. Please upload files.", style={"color": "gray"}
-            )
+            html.Div("No features available.", style={"color": "gray"})
         ]
 
     return feature_selection_ui

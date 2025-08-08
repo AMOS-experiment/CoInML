@@ -1,54 +1,84 @@
 import numpy as np
 
 
+# TODO: Define feature patterns only once and reuse
+def has_physics_features(df):
+    """Check if a dataframe has calculated physics features."""
+    # List of feature patterns that indicate physics features were calculated
+    feature_patterns = [
+        "KER",
+        "EESum",
+        "EESharing",
+        "TotalEnergy",
+        "mom_mag_",
+        "energy_ion",
+        "energy_electron",
+        "energy_neutral",
+        "theta_",
+        "phi_",
+        "angle_",
+        "relative_angle_",
+        "dot_product_",
+        "cosine_similarity_",
+        "momentum_diff_",
+        "mom_diff_",
+        "phi_diff_",
+        "theta_diff_",
+        "phi_rel_",
+        "theta_rel_",
+    ]
+
+    # Check if any column contains any of these patterns
+    for col in df.columns:
+        for pattern in feature_patterns:
+            if pattern in col:
+                return True
+    return False
+
+
 def calculate_physics_features_flexible(df, config=None):
-    """Calculate physics features with flexible particle configuration."""
+    """Calculate physics features with flexible particle configuration including all missing features."""
     try:
-        # Create a copy of the dataframe
         result_df = df.copy()
 
-        # Get particle configuration
-        if config and "particle_count" in config:
-            num_ions = config["particle_count"].get("ions", 2)
-            num_neutrals = config["particle_count"].get("neutrals", 1)
-            num_electrons = config["particle_count"].get("electrons", 2)
-        else:
-            # Default configuration
-            num_ions = 2
-            num_neutrals = 1
-            num_electrons = 2
+        # Default configuration
+        if config is None:
+            config = {
+                "num_ions": 2,
+                "num_neutrals": 1,
+                "num_electrons": 2,
+                "ion_masses": [2, 2],  # In amu
+                "neutral_masses": [16],  # In amu
+                "ion_charges": [1, 1],
+            }
 
+        num_ions = config.get("num_ions", 2)
+        num_neutrals = config.get("num_neutrals", 1)
+        num_electrons = config.get("num_electrons", 2)
         total_particles = num_ions + num_neutrals + num_electrons
 
-        # Get masses from configuration
+        # Get particle masses
+        ion_masses = config.get("ion_masses", [2] * num_ions)
+        neutral_masses = config.get("neutral_masses", [16] * num_neutrals)
+
+        # Convert to electron masses
         particle_masses = {}
-        if config and "particles" in config:
-            particles_config = config["particles"]
+        for i in range(num_ions):
+            mass_amu = ion_masses[i] if i < len(ion_masses) else 2
+            particle_masses[f"ion{i+1}"] = mass_amu * 1836
 
-            # Process ions
-            for i in range(num_ions):
-                mass = particles_config.get(f"ion_{i}", {}).get("mass", 1) * 1836
-                particle_masses[f"ion{i+1}"] = mass
+        for i in range(num_neutrals):
+            mass_amu = neutral_masses[i] if i < len(neutral_masses) else 16
+            particle_masses[f"neutral{i+1}"] = mass_amu * 1836
 
-            # Process neutrals
-            for i in range(num_neutrals):
-                mass = particles_config.get(f"neutral_{i}", {}).get("mass", 16) * 1836
-                particle_masses[f"neutral{i+1}"] = mass
+        for i in range(num_electrons):
+            particle_masses[f"electron{i+1}"] = 1
 
-            # Electrons always have mass 1
-            for i in range(num_electrons):
-                particle_masses[f"electron{i+1}"] = 1
-        else:
-            # Default masses
-            for i in range(num_ions):
-                particle_masses[f"ion{i+1}"] = 2 * 1836  # Default deuterium
-            for i in range(num_neutrals):
-                particle_masses[f"neutral{i+1}"] = 16 * 1836  # Default oxygen
-            for i in range(num_electrons):
-                particle_masses[f"electron{i+1}"] = 1
-
-        # Calculate momentum magnitudes for all particles
+        # Calculate momentum magnitudes and store momentum vectors
         particle_idx = 0
+        momentum_vectors = []
+        momentum_magnitudes = []
+        particle_names = []
 
         # Process ions
         for i in range(num_ions):
@@ -60,10 +90,14 @@ def calculate_physics_features_flexible(df, config=None):
                         f"particle_{particle_idx}_Pz",
                     ]
                 ].to_numpy()
-                result_df[f"mom_mag_ion{i+1}"] = np.linalg.norm(p, axis=1)
-                result_df[f"energy_ion{i+1}"] = (
-                    result_df[f"mom_mag_ion{i+1}"] ** 2
-                ) / (2 * particle_masses[f"ion{i+1}"])
+                momentum_vectors.append(p)
+                mag = np.linalg.norm(p, axis=1)
+                momentum_magnitudes.append(mag)
+                particle_names.append(f"ion{i+1}")
+                result_df[f"mom_mag_ion{i+1}"] = mag
+                result_df[f"energy_ion{i+1}"] = (mag**2) / (
+                    2 * particle_masses[f"ion{i+1}"]
+                )
                 particle_idx += 1
 
         # Process neutrals
@@ -76,10 +110,14 @@ def calculate_physics_features_flexible(df, config=None):
                         f"particle_{particle_idx}_Pz",
                     ]
                 ].to_numpy()
-                result_df[f"mom_mag_neutral{i+1}"] = np.linalg.norm(p, axis=1)
-                result_df[f"energy_neutral{i+1}"] = (
-                    result_df[f"mom_mag_neutral{i+1}"] ** 2
-                ) / (2 * particle_masses[f"neutral{i+1}"])
+                momentum_vectors.append(p)
+                mag = np.linalg.norm(p, axis=1)
+                momentum_magnitudes.append(mag)
+                particle_names.append(f"neutral{i+1}")
+                result_df[f"mom_mag_neutral{i+1}"] = mag
+                result_df[f"energy_neutral{i+1}"] = (mag**2) / (
+                    2 * particle_masses[f"neutral{i+1}"]
+                )
                 particle_idx += 1
 
         # Process electrons
@@ -92,10 +130,14 @@ def calculate_physics_features_flexible(df, config=None):
                         f"particle_{particle_idx}_Pz",
                     ]
                 ].to_numpy()
-                result_df[f"mom_mag_electron{i+1}"] = np.linalg.norm(p, axis=1)
-                result_df[f"energy_electron{i+1}"] = (
-                    result_df[f"mom_mag_electron{i+1}"] ** 2
-                ) / (2 * particle_masses[f"electron{i+1}"])
+                momentum_vectors.append(p)
+                mag = np.linalg.norm(p, axis=1)
+                momentum_magnitudes.append(mag)
+                particle_names.append(f"electron{i+1}")
+                result_df[f"mom_mag_electron{i+1}"] = mag
+                result_df[f"energy_electron{i+1}"] = (mag**2) / (
+                    2 * particle_masses[f"electron{i+1}"]
+                )
                 particle_idx += 1
 
         # Calculate combined energies
@@ -117,6 +159,12 @@ def calculate_physics_features_flexible(df, config=None):
         if ee_cols:
             result_df["EESum"] = result_df[ee_cols].sum(axis=1)
 
+            # Calculate EESharing (electron energy sharing)
+            if num_electrons >= 2:
+                result_df["EESharing"] = result_df["energy_electron1"] / (
+                    result_df["EESum"] + 1e-8
+                )
+
         # Total energy
         all_energy_cols = [
             col for col in result_df.columns if col.startswith("energy_")
@@ -124,62 +172,72 @@ def calculate_physics_features_flexible(df, config=None):
         if all_energy_cols:
             result_df["TotalEnergy"] = result_df[all_energy_cols].sum(axis=1)
 
-        # Calculate angles for each particle
-        particle_types = []
-        for i in range(num_ions):
-            particle_types.append(("ion", i + 1))
-        for i in range(num_neutrals):
-            particle_types.append(("neutral", i + 1))
-        for i in range(num_electrons):
-            particle_types.append(("electron", i + 1))
+        # Calculate angles for each particle (theta and phi)
+        for idx, name in enumerate(particle_names):
+            if idx < len(momentum_vectors):
+                p_vec = momentum_vectors[idx]
+                p_mag = momentum_magnitudes[idx]
 
-        for idx, (ptype, pnum) in enumerate(particle_types):
-            if idx < total_particles:
-                particle_name = f"{ptype}{pnum}"
-                if f"mom_mag_{particle_name}" in result_df.columns:
-                    p_mag = result_df[f"mom_mag_{particle_name}"]
-                    p_z = df[f"particle_{idx}_Pz"]
+                # Calculate theta (polar angle from z-axis)
+                cos_theta = np.clip(p_vec[:, 2] / (p_mag + 1e-8), -1.0, 1.0)
+                result_df[f"theta_{name}"] = np.arccos(cos_theta)
 
-                    # Calculate theta
-                    cos_theta = np.clip(p_z / (p_mag + 1e-8), -1.0, 1.0)
-                    result_df[f"theta_{particle_name}"] = np.arccos(cos_theta)
+                # Calculate phi (azimuthal angle in xy-plane)
+                result_df[f"phi_{name}"] = np.arctan2(p_vec[:, 1], p_vec[:, 0])
 
-                    # Calculate phi
-                    p_x = df[f"particle_{idx}_Px"]
-                    p_y = df[f"particle_{idx}_Py"]
-                    result_df[f"phi_{particle_name}"] = np.arctan2(p_y, p_x)
+        # Calculate pairwise features
+        for i in range(len(particle_names)):
+            for j in range(i + 1, len(particle_names)):
+                p1_name = particle_names[i]
+                p2_name = particle_names[j]
 
-        # Calculate relative angles between particle pairs
-        for i, (ptype1, pnum1) in enumerate(particle_types):
-            for j, (ptype2, pnum2) in enumerate(particle_types):
-                if i < j and i < total_particles and j < total_particles:
-                    p1_name = f"{ptype1}{pnum1}"
-                    p2_name = f"{ptype2}{pnum2}"
+                # Get vectors and magnitudes
+                vec1 = momentum_vectors[i]
+                vec2 = momentum_vectors[j]
+                mag1 = momentum_magnitudes[i]
+                mag2 = momentum_magnitudes[j]
 
-                    # Extract momentum vectors
-                    vec1 = df[
-                        [f"particle_{i}_Px", f"particle_{i}_Py", f"particle_{i}_Pz"]
-                    ].values
-                    vec2 = df[
-                        [f"particle_{j}_Px", f"particle_{j}_Py", f"particle_{j}_Pz"]
-                    ].values
+                # Particle indices for naming (1-indexed)
+                idx1 = i + 1
+                idx2 = j + 1
 
-                    # Calculate dot products
-                    dot_products = np.sum(vec1 * vec2, axis=1)
+                # Calculate dot products
+                dot_products = np.sum(vec1 * vec2, axis=1)
+                result_df[f"dot_product_{idx1}{idx2}"] = dot_products
 
-                    # Get magnitudes
-                    if (
-                        f"mom_mag_{p1_name}" in result_df.columns
-                        and f"mom_mag_{p2_name}" in result_df.columns
-                    ):
-                        mag1 = result_df[f"mom_mag_{p1_name}"].values
-                        mag2 = result_df[f"mom_mag_{p2_name}"].values
+                # Calculate cosine similarity
+                cosine_sim = dot_products / (mag1 * mag2 + 1e-8)
+                cosine_sim = np.clip(cosine_sim, -1.0, 1.0)
+                result_df[f"cosine_similarity_{idx1}{idx2}"] = cosine_sim
 
-                        # Calculate angle
-                        cos_angle = dot_products / (mag1 * mag2 + 1e-8)
-                        cos_angle = np.clip(cos_angle, -1.0, 1.0)
-                        result_df[f"angle_{p1_name}_{p2_name}"] = np.arccos(cos_angle)
-                        result_df[f"dot_product_{p1_name}_{p2_name}"] = dot_products
+                # Calculate relative angle from cosine similarity
+                result_df[f"relative_angle_{idx1}{idx2}"] = np.arccos(cosine_sim)
+
+                # Calculate angle between particles (same as relative_angle but kept for compatibility)
+                result_df[f"angle_{p1_name}_{p2_name}"] = np.arccos(cosine_sim)
+
+                # Calculate momentum magnitude difference
+                result_df[f"momentum_diff_{idx1}{idx2}"] = np.abs(mag1 - mag2)
+
+                # Calculate phi difference (Δφ)
+                phi1 = result_df[f"phi_{p1_name}"].values
+                phi2 = result_df[f"phi_{p2_name}"].values
+                phi_diff = np.abs(phi1 - phi2)
+                phi_diff = np.arctan2(
+                    np.sin(phi_diff), np.cos(phi_diff)
+                )  # Ensure proper periodicity
+                result_df[f"phi_diff_{idx1}{idx2}"] = phi_diff
+
+                # Calculate theta difference (Δθ)
+                theta1 = result_df[f"theta_{p1_name}"].values
+                theta2 = result_df[f"theta_{p2_name}"].values
+                result_df[f"theta_diff_{idx1}{idx2}"] = np.abs(theta1 - theta2)
+
+                # Calculate phi ratio (φ_rel)
+                result_df[f"phi_rel_{idx1}{idx2}"] = phi1 / (phi2 + 1e-8)
+
+                # Calculate theta ratio (θ_rel)
+                result_df[f"theta_rel_{idx1}{idx2}"] = theta1 / (theta2 + 1e-8)
 
         return result_df
 
@@ -192,7 +250,7 @@ def calculate_physics_features_flexible(df, config=None):
 
 
 def calculate_physics_features_with_profile(df, profile_config):
-    """Calculate physics features using a specific configuration profile."""
+    """Calculate physics features using a specific configuration profile including all missing features."""
     try:
         result_df = df.copy()
 
@@ -250,6 +308,11 @@ def calculate_physics_features_with_profile(df, profile_config):
                 }
             )
 
+        # Store momentum vectors and magnitudes for later use
+        momentum_vectors = []
+        momentum_magnitudes = []
+        feature_prefixes = []
+
         # Calculate features for each particle
         for p_idx, particle in enumerate(particle_list):
             if p_idx < total_particles:
@@ -262,6 +325,10 @@ def calculate_physics_features_with_profile(df, profile_config):
                 # Calculate momentum magnitude
                 p_mag = np.linalg.norm(p_vec, axis=1)
 
+                # Store for later use
+                momentum_vectors.append(p_vec)
+                momentum_magnitudes.append(p_mag)
+
                 # Create feature names based on particle type and name
                 if particle["type"] == "ion":
                     feature_prefix = f"{particle['name']}_ion{particle['index']+1}"
@@ -269,6 +336,8 @@ def calculate_physics_features_with_profile(df, profile_config):
                     feature_prefix = f"{particle['name']}_neutral{particle['index']+1}"
                 else:
                     feature_prefix = f"electron{particle['index']+1}"
+
+                feature_prefixes.append(feature_prefix)
 
                 # Store momentum magnitude
                 result_df[f"mom_mag_{feature_prefix}"] = p_mag
@@ -300,6 +369,14 @@ def calculate_physics_features_with_profile(df, profile_config):
         if electron_energy_cols:
             result_df["EESum"] = result_df[electron_energy_cols].sum(axis=1)
 
+            # Calculate EESharing
+            if len(electron_energy_cols) >= 2:
+                # Assuming first electron for sharing calculation
+                first_electron_col = electron_energy_cols[0]
+                result_df["EESharing"] = result_df[first_electron_col] / (
+                    result_df["EESum"] + 1e-8
+                )
+
         # Total energy
         all_energy_cols = [
             col for col in result_df.columns if col.startswith("energy_")
@@ -307,45 +384,68 @@ def calculate_physics_features_with_profile(df, profile_config):
         if all_energy_cols:
             result_df["TotalEnergy"] = result_df[all_energy_cols].sum(axis=1)
 
-        # Calculate relative angles between particles
+        # Calculate pairwise features between particles
         for i in range(len(particle_list)):
             for j in range(i + 1, len(particle_list)):
                 if i < total_particles and j < total_particles:
-                    p1 = particle_list[i]
-                    p2 = particle_list[j]
+                    # TODO: Are these needed?
+                    # p1 = particle_list[i]
+                    # p2 = particle_list[j]
 
-                    # Get feature prefixes
-                    if p1["type"] == "ion":
-                        prefix1 = f"{p1['name']}_ion{p1['index']+1}"
-                    elif p1["type"] == "neutral":
-                        prefix1 = f"{p1['name']}_neutral{p1['index']+1}"
-                    else:
-                        prefix1 = f"electron{p1['index']+1}"
+                    prefix1 = feature_prefixes[i]
+                    prefix2 = feature_prefixes[j]
 
-                    if p2["type"] == "ion":
-                        prefix2 = f"{p2['name']}_ion{p2['index']+1}"
-                    elif p2["type"] == "neutral":
-                        prefix2 = f"{p2['name']}_neutral{p2['index']+1}"
-                    else:
-                        prefix2 = f"electron{p2['index']+1}"
+                    # Get vectors and magnitudes
+                    vec1 = momentum_vectors[i]
+                    vec2 = momentum_vectors[j]
+                    mag1 = momentum_magnitudes[i]
+                    mag2 = momentum_magnitudes[j]
 
-                    # Calculate relative angle
-                    vec1 = df[
-                        [f"particle_{i}_Px", f"particle_{i}_Py", f"particle_{i}_Pz"]
-                    ].values
-                    vec2 = df[
-                        [f"particle_{j}_Px", f"particle_{j}_Py", f"particle_{j}_Pz"]
-                    ].values
+                    # Particle indices for naming (1-indexed)
+                    idx1 = i + 1
+                    idx2 = j + 1
 
+                    # Calculate dot product
                     dot_product = np.sum(vec1 * vec2, axis=1)
-                    mag1 = result_df[f"mom_mag_{prefix1}"].values
-                    mag2 = result_df[f"mom_mag_{prefix2}"].values
+                    result_df[f"dot_product_{prefix1}_{prefix2}"] = dot_product
+                    result_df[f"dot_product_{idx1}{idx2}"] = (
+                        dot_product  # Also use numeric indices
+                    )
 
+                    # Calculate cosine similarity
                     cos_angle = dot_product / (mag1 * mag2 + 1e-8)
                     cos_angle = np.clip(cos_angle, -1.0, 1.0)
+                    result_df[f"cosine_similarity_{idx1}{idx2}"] = cos_angle
 
-                    result_df[f"angle_{prefix1}_{prefix2}"] = np.arccos(cos_angle)
-                    result_df[f"dot_product_{prefix1}_{prefix2}"] = dot_product
+                    # Calculate relative angle
+                    angle = np.arccos(cos_angle)
+                    result_df[f"angle_{prefix1}_{prefix2}"] = angle
+                    result_df[f"relative_angle_{idx1}{idx2}"] = angle
+
+                    # Calculate momentum magnitude difference
+                    result_df[f"momentum_diff_{idx1}{idx2}"] = np.abs(mag1 - mag2)
+
+                    # Get phi and theta values
+                    phi1 = result_df[f"phi_{prefix1}"].values
+                    phi2 = result_df[f"phi_{prefix2}"].values
+                    theta1 = result_df[f"theta_{prefix1}"].values
+                    theta2 = result_df[f"theta_{prefix2}"].values
+
+                    # Calculate phi difference (Δφ)
+                    phi_diff = np.abs(phi1 - phi2)
+                    phi_diff = np.arctan2(
+                        np.sin(phi_diff), np.cos(phi_diff)
+                    )  # Ensure proper periodicity
+                    result_df[f"phi_diff_{idx1}{idx2}"] = phi_diff
+
+                    # Calculate theta difference (Δθ)
+                    result_df[f"theta_diff_{idx1}{idx2}"] = np.abs(theta1 - theta2)
+
+                    # Calculate phi ratio (φ_rel)
+                    result_df[f"phi_rel_{idx1}{idx2}"] = phi1 / (phi2 + 1e-8)
+
+                    # Calculate theta ratio (θ_rel)
+                    result_df[f"theta_rel_{idx1}{idx2}"] = theta1 / (theta2 + 1e-8)
 
         return result_df
 

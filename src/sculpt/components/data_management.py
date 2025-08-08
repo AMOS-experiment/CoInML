@@ -340,6 +340,10 @@ def create_data_management_tab():
                                                     "color": "green",
                                                 },
                                             ),
+                                            html.Div(
+                                                id="feature-calculation-status",
+                                                style={"marginTop": "15px"},
+                                            ),
                                         ],
                                         style={"padding": "20px"},
                                     )

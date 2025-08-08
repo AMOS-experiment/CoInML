@@ -71,8 +71,8 @@ def train_autoencoder_and_run_umap(
     original_figure,
     latent_store,
     selected_metrics,
-    set_progress,
     genetic_features_store,
+    set_progress,
 ):
     """Train autoencoder and run UMAP on latent space with genetic features support."""
     try:

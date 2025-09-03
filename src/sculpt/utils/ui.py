@@ -40,14 +40,31 @@ def create_smart_confidence_ui(confidence_data):
                             ),
                             # Uncertainty display - properly formatted
                             (
-                                html.Div([
-                                    html.Span("±", style={"fontSize": "16px", "color": "gray", "marginRight": "2px"}),
-                                    html.Span(
-                                        f"{confidence_data['uncertainty']['uncertainty']:.2f}",
-                                        style={"fontSize": "16px", "color": "gray", "marginRight": "15px"}
-                                    )
-                                ], style={"display": "inline-flex", "alignItems": "center"})
-                                if 'uncertainty' in confidence_data 
+                                html.Div(
+                                    [
+                                        html.Span(
+                                            "±",
+                                            style={
+                                                "fontSize": "16px",
+                                                "color": "gray",
+                                                "marginRight": "2px",
+                                            },
+                                        ),
+                                        html.Span(
+                                            f"{confidence_data['uncertainty']['uncertainty']:.2f}",
+                                            style={
+                                                "fontSize": "16px",
+                                                "color": "gray",
+                                                "marginRight": "15px",
+                                            },
+                                        ),
+                                    ],
+                                    style={
+                                        "display": "inline-flex",
+                                        "alignItems": "center",
+                                    },
+                                )
+                                if "uncertainty" in confidence_data
                                 else html.Div()
                             ),
                             html.Div(
@@ -216,7 +233,11 @@ def create_smart_confidence_ui(confidence_data):
                             [
                                 html.Li(
                                     warning,
-                                    style={"fontSize": "11px", "marginBottom": "2px", "color": "#d32f2f"},
+                                    style={
+                                        "fontSize": "11px",
+                                        "marginBottom": "2px",
+                                        "color": "#d32f2f",
+                                    },
                                 )
                                 for warning in confidence_data.get("warnings", [])
                             ],
@@ -280,6 +301,7 @@ def create_smart_confidence_ui(confidence_data):
             "marginTop": "15px",
         },
     )
+
 
 def create_confidence_bar(score, color):
     """Create a segmented confidence bar."""

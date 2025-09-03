@@ -184,7 +184,16 @@ def run_genetic_feature_discovery_and_umap(
                 fig = go.Figure()
 
                 unique_files = umap_df["file_label"].unique()
-                colors = ["blue", "red", "green", "orange", "purple", "brown", "pink", "gray"]
+                colors = [
+                    "blue",
+                    "red",
+                    "green",
+                    "orange",
+                    "purple",
+                    "brown",
+                    "pink",
+                    "gray",
+                ]
 
                 for i, file_label in enumerate(unique_files):
                     file_data = umap_df[umap_df["file_label"] == file_label]
@@ -226,63 +235,80 @@ def run_genetic_feature_discovery_and_umap(
                     all_metrics = {}
                     cluster_labels_for_metrics = gp_df["Cluster"].values
                     unique_clusters = len(np.unique(cluster_labels_for_metrics))
-                    
+
                     # Calculate clustering quality metrics
                     if unique_clusters > 1:
                         try:
-                            all_metrics["silhouette"] = silhouette_score(umap_result, cluster_labels_for_metrics)
+                            all_metrics["silhouette"] = silhouette_score(
+                                umap_result, cluster_labels_for_metrics
+                            )
                         except:
                             pass
-                            
+
                         try:
-                            all_metrics["davies_bouldin"] = davies_bouldin_score(umap_result, cluster_labels_for_metrics)
+                            all_metrics["davies_bouldin"] = davies_bouldin_score(
+                                umap_result, cluster_labels_for_metrics
+                            )
                         except:
                             pass
-                            
+
                         try:
-                            all_metrics["calinski_harabasz"] = calinski_harabasz_score(umap_result, cluster_labels_for_metrics)
+                            all_metrics["calinski_harabasz"] = calinski_harabasz_score(
+                                umap_result, cluster_labels_for_metrics
+                            )
                         except:
                             pass
-                    
+
                     # Calculate clusterability metrics
                     try:
                         all_metrics["hopkins"] = hopkins_statistic(umap_result)
                     except:
                         pass
-                        
+
                     # Calculate stability if enough data
                     if len(umap_result) > 100:
                         try:
                             # Use a simple stability calculation
                             from sklearn.cluster import KMeans
-                            kmeans = KMeans(n_clusters=unique_clusters, random_state=42, n_init=10)
+
+                            kmeans = KMeans(
+                                n_clusters=unique_clusters, random_state=42, n_init=10
+                            )
                             kmeans_labels = kmeans.fit_predict(umap_result)
-                            all_metrics["stability"] = cluster_stability(umap_result, eps=0.1, min_samples=5, n_iterations=3)
+                            all_metrics["stability"] = cluster_stability(
+                                umap_result, eps=0.1, min_samples=5, n_iterations=3
+                            )
                         except:
                             pass
-                    
+
                     # Calculate comprehensive confidence score
                     confidence_result = calculate_adaptive_confidence_score(
-                        all_metrics, 
-                        data_characteristics=None, 
-                        clustering_method='genetic_kmeans'
+                        all_metrics,
+                        data_characteristics=None,
+                        clustering_method="genetic_kmeans",
                     )
-                    
+
                     # Create UI using the proper confidence assessment
                     metrics_children = create_smart_confidence_ui(confidence_result)
-                        
+
                 except Exception as metric_error:
-                    debug_text.append(f"Reliability assessment failed: {str(metric_error)}")
+                    debug_text.append(
+                        f"Reliability assessment failed: {str(metric_error)}"
+                    )
                     # Fallback to basic metrics
                     metrics_children = []
                     if unique_clusters > 1 and selected_metrics:
                         try:
-                            if 'silhouette' in selected_metrics:
-                                sil_score = silhouette_score(umap_result, cluster_labels_for_metrics)
-                                metrics_children.append(html.P(f"Silhouette Score: {sil_score:.3f}"))
+                            if "silhouette" in selected_metrics:
+                                sil_score = silhouette_score(
+                                    umap_result, cluster_labels_for_metrics
+                                )
+                                metrics_children.append(
+                                    html.P(f"Silhouette Score: {sil_score:.3f}")
+                                )
                         except:
                             pass
-                    
+
                     if not metrics_children:
                         metrics_children = [html.P("Basic metrics calculation failed")]
 
@@ -299,6 +325,7 @@ def run_genetic_feature_discovery_and_umap(
 
             except Exception as e:
                 import traceback
+
                 trace = traceback.format_exc()
                 error_message = f"Error running UMAP on genetic features: {str(e)}"
                 debug_text.append(error_message)
@@ -386,39 +413,55 @@ def run_genetic_feature_discovery_and_umap(
                 debug_text.append(
                     f"Standardized data for analysis, shape: {X_scaled.shape}"
                 )
-                
+
                 # Add feature mapping for better understanding
                 debug_text.append("Feature mapping (first 10):")
                 for i in range(min(10, len(feature_cols))):
                     debug_text.append(f"  X{i} = {feature_cols[i]}")
                 if len(feature_cols) > 10:
-                    debug_text.append(f"  ... and {len(feature_cols) - 10} more features")
+                    debug_text.append(
+                        f"  ... and {len(feature_cols) - 10} more features"
+                    )
 
                 # Apply clustering with proper error handling
                 if clustering_method == "dbscan":
                     eps_val = float(dbscan_eps) if dbscan_eps is not None else 0.3
-                    min_samples_val = int(dbscan_min_samples) if dbscan_min_samples is not None else 5
-                    
+                    min_samples_val = (
+                        int(dbscan_min_samples) if dbscan_min_samples is not None else 5
+                    )
+
                     clusterer = DBSCAN(eps=eps_val, min_samples=min_samples_val)
                     cluster_labels = clusterer.fit_predict(X_scaled)
                     debug_text.append(
                         f"Applied DBSCAN clustering with eps={eps_val}, min_samples={min_samples_val}"
                     )
                 elif clustering_method == "kmeans":
-                    n_clusters_val = int(kmeans_n_clusters) if kmeans_n_clusters is not None else 3
-                    clusterer = KMeans(n_clusters=n_clusters_val, random_state=42, n_init=10)
+                    n_clusters_val = (
+                        int(kmeans_n_clusters) if kmeans_n_clusters is not None else 3
+                    )
+                    clusterer = KMeans(
+                        n_clusters=n_clusters_val, random_state=42, n_init=10
+                    )
                     cluster_labels = clusterer.fit_predict(X_scaled)
-                    debug_text.append(f"Applied KMeans clustering with {n_clusters_val} clusters")
+                    debug_text.append(
+                        f"Applied KMeans clustering with {n_clusters_val} clusters"
+                    )
                 elif clustering_method == "agglomerative":
-                    n_clusters_val = int(agglo_n_clusters) if agglo_n_clusters is not None else 3
+                    n_clusters_val = (
+                        int(agglo_n_clusters) if agglo_n_clusters is not None else 3
+                    )
                     linkage_val = agglo_linkage if agglo_linkage is not None else "ward"
-                    clusterer = AgglomerativeClustering(n_clusters=n_clusters_val, linkage=linkage_val)
+                    clusterer = AgglomerativeClustering(
+                        n_clusters=n_clusters_val, linkage=linkage_val
+                    )
                     cluster_labels = clusterer.fit_predict(X_scaled)
                     debug_text.append(
                         f"Applied Agglomerative clustering with {n_clusters_val} clusters, linkage={linkage_val}"
                     )
                 else:
-                    debug_text.append("Invalid clustering method specified. Using KMeans as fallback.")
+                    debug_text.append(
+                        "Invalid clustering method specified. Using KMeans as fallback."
+                    )
                     clusterer = KMeans(n_clusters=3, random_state=42, n_init=10)
                     cluster_labels = clusterer.fit_predict(X_scaled)
 
@@ -432,41 +475,68 @@ def run_genetic_feature_discovery_and_umap(
                 # Handle case where clustering failed (all noise or too few clusters)
                 if num_clusters < 2:
                     if clustering_method == "dbscan":
-                        debug_text.append("DBSCAN found insufficient clusters. Trying with smaller eps...")
-                        
+                        debug_text.append(
+                            "DBSCAN found insufficient clusters. Trying with smaller eps..."
+                        )
+
                         # Try progressively smaller eps values
                         for eps_test in [0.1, 0.05, 0.02]:
-                            test_clusterer = DBSCAN(eps=eps_test, min_samples=max(2, min_samples_val//2))
+                            test_clusterer = DBSCAN(
+                                eps=eps_test, min_samples=max(2, min_samples_val // 2)
+                            )
                             test_labels = test_clusterer.fit_predict(X_scaled)
-                            test_num_clusters = len([label for label in np.unique(test_labels) if label != -1])
-                            
+                            test_num_clusters = len(
+                                [
+                                    label
+                                    for label in np.unique(test_labels)
+                                    if label != -1
+                                ]
+                            )
+
                             if test_num_clusters >= 2:
                                 cluster_labels = test_labels
-                                debug_text.append(f"Success with eps={eps_test}: found {test_num_clusters} clusters")
+                                debug_text.append(
+                                    f"Success with eps={eps_test}: found {test_num_clusters} clusters"
+                                )
                                 break
                         else:
                             # If DBSCAN still fails, fall back to KMeans
-                            debug_text.append("DBSCAN failed to find clusters. Falling back to KMeans.")
+                            debug_text.append(
+                                "DBSCAN failed to find clusters. Falling back to KMeans."
+                            )
                             clusterer = KMeans(n_clusters=3, random_state=42, n_init=10)
                             cluster_labels = clusterer.fit_predict(X_scaled)
                     else:
                         # For KMeans/Agglomerative, this shouldn't happen, but just in case
-                        debug_text.append("Clustering produced insufficient groups. Using KMeans fallback.")
+                        debug_text.append(
+                            "Clustering produced insufficient groups. Using KMeans fallback."
+                        )
                         clusterer = KMeans(n_clusters=3, random_state=42, n_init=10)
                         cluster_labels = clusterer.fit_predict(X_scaled)
 
                 # Verify we have good clustering before proceeding
                 final_unique_labels = np.unique(cluster_labels)
-                final_num_clusters = len([label for label in final_unique_labels if label != -1])
-                final_num_noise = np.sum(cluster_labels == -1) if -1 in final_unique_labels else 0
+                final_num_clusters = len(
+                    [label for label in final_unique_labels if label != -1]
+                )
+                final_num_noise = (
+                    np.sum(cluster_labels == -1) if -1 in final_unique_labels else 0
+                )
 
-                debug_text.append(f"Final clustering: {final_num_clusters} clusters, {final_num_noise} noise points")
+                debug_text.append(
+                    f"Final clustering: {final_num_clusters} clusters, {final_num_noise} noise points"
+                )
 
                 # Check if clustering is suitable for genetic programming
                 if final_num_clusters < 2:
                     return (
                         empty_fig,
-                        "<br>".join(debug_text + ["Error: Could not find meaningful clusters for genetic programming."]),
+                        "<br>".join(
+                            debug_text
+                            + [
+                                "Error: Could not find meaningful clusters for genetic programming."
+                            ]
+                        ),
                         empty_store,
                         "Clustering failed",
                         empty_metrics,
@@ -485,24 +555,35 @@ def run_genetic_feature_discovery_and_umap(
                         if cluster_id != -1:  # Skip noise
                             mask = cluster_labels == cluster_id
                             cluster_means[cluster_id] = np.mean(pc1[mask])
-                    
+
                     # Assign cluster-specific offsets
                     for cluster_id, mean_val in cluster_means.items():
                         mask = cluster_labels == cluster_id
-                        synthetic_target[mask] = pc1[mask] + cluster_id * 5  # Spread clusters apart
+                        synthetic_target[mask] = (
+                            pc1[mask] + cluster_id * 5
+                        )  # Spread clusters apart
                 else:
                     # No noise points, simpler approach
                     synthetic_target = pc1 + cluster_labels * 5
 
-                debug_text.append(f"Created synthetic target with shape: {synthetic_target.shape}")
-                debug_text.append(f"Target range: [{synthetic_target.min():.3f}, {synthetic_target.max():.3f}]")
+                debug_text.append(
+                    f"Created synthetic target with shape: {synthetic_target.shape}"
+                )
+                debug_text.append(
+                    f"Target range: [{synthetic_target.min():.3f}, {synthetic_target.max():.3f}]"
+                )
 
                 # Verify we have enough samples for genetic programming
                 min_required_samples = max(10, int(gp_population_size or 1000) // 100)
                 if len(X_scaled) < min_required_samples:
                     return (
                         empty_fig,
-                        "<br>".join(debug_text + [f"Error: Need at least {min_required_samples} samples for genetic programming, but only have {len(X_scaled)}."]),
+                        "<br>".join(
+                            debug_text
+                            + [
+                                f"Error: Need at least {min_required_samples} samples for genetic programming, but only have {len(X_scaled)}."
+                            ]
+                        ),
                         empty_store,
                         "Insufficient data",
                         empty_metrics,
@@ -512,68 +593,86 @@ def run_genetic_feature_discovery_and_umap(
                 function_set = []
 
                 if not gp_functions:
-                    gp_functions = ['basic']  # Default fallback
+                    gp_functions = ["basic"]  # Default fallback
 
-                if 'basic' in gp_functions:
-                    function_set.extend(['add', 'sub', 'mul', 'div'])
+                if "basic" in gp_functions:
+                    function_set.extend(["add", "sub", "mul", "div"])
 
-                if 'trig' in gp_functions:
+                if "trig" in gp_functions:
                     # Add safe trigonometric functions
                     def safe_sin(x):
                         return np.sin(np.clip(x, -10, 10))
-                    
+
                     def safe_cos(x):
                         return np.cos(np.clip(x, -10, 10))
-                    
-                    sin_func = make_function(function=safe_sin, name='sin', arity=1)
-                    cos_func = make_function(function=safe_cos, name='cos', arity=1)
+
+                    sin_func = make_function(function=safe_sin, name="sin", arity=1)
+                    cos_func = make_function(function=safe_cos, name="cos", arity=1)
                     function_set.extend([sin_func, cos_func])
 
-                if 'exp_log' in gp_functions:
+                if "exp_log" in gp_functions:
                     # Add safe exponential and log functions
                     def safe_exp(x):
                         return np.exp(np.clip(x, -10, 10))
-                    
+
                     def safe_log(x):
                         return np.log(np.abs(x) + 1e-6)
-                    
-                    exp_func = make_function(function=safe_exp, name='exp', arity=1)
-                    log_func = make_function(function=safe_log, name='log', arity=1)
+
+                    exp_func = make_function(function=safe_exp, name="exp", arity=1)
+                    log_func = make_function(function=safe_log, name="log", arity=1)
                     function_set.extend([exp_func, log_func])
 
-                if 'sqrt_pow' in gp_functions:
+                if "sqrt_pow" in gp_functions:
                     # Add safe sqrt and power functions
                     def safe_sqrt(x):
                         return np.sqrt(np.abs(x))
-                    
+
                     def safe_pow(x, y):
                         return np.power(np.abs(x), np.clip(y, -3, 3))
-                    
-                    sqrt_func = make_function(function=safe_sqrt, name='sqrt', arity=1)
-                    pow_func = make_function(function=safe_pow, name='pow', arity=2)
+
+                    sqrt_func = make_function(function=safe_sqrt, name="sqrt", arity=1)
+                    pow_func = make_function(function=safe_pow, name="pow", arity=2)
                     function_set.extend([sqrt_func, pow_func])
 
-                if 'special' in gp_functions:
+                if "special" in gp_functions:
                     # Add special functions
                     def safe_abs(x):
                         return np.abs(x)
-                    
+
                     def safe_inv(x):
                         return 1.0 / (x + 1e-6)
-                    
-                    abs_func = make_function(function=safe_abs, name='abs', arity=1)
-                    inv_func = make_function(function=safe_inv, name='inv', arity=1)
+
+                    abs_func = make_function(function=safe_abs, name="abs", arity=1)
+                    inv_func = make_function(function=safe_inv, name="inv", arity=1)
                     function_set.extend([abs_func, inv_func])
 
                 debug_text.append(f"Using {len(function_set)} mathematical functions")
 
                 # Use SymbolicTransformer with minimal, safe parameters
-                generations_val = max(5, min(int(gp_generations) if gp_generations is not None else 10, 50))
-                population_val = max(50, min(int(gp_population_size) if gp_population_size is not None else 200, 1000))
-                components_val = max(1, min(int(gp_n_components) if gp_n_components is not None else 5, 10))
-                
-                debug_text.append(f"GP Parameters: gen={generations_val}, pop={population_val}, comp={components_val}")
-                
+                generations_val = max(
+                    5,
+                    min(int(gp_generations) if gp_generations is not None else 10, 50),
+                )
+                population_val = max(
+                    50,
+                    min(
+                        (
+                            int(gp_population_size)
+                            if gp_population_size is not None
+                            else 200
+                        ),
+                        1000,
+                    ),
+                )
+                components_val = max(
+                    1,
+                    min(int(gp_n_components) if gp_n_components is not None else 5, 10),
+                )
+
+                debug_text.append(
+                    f"GP Parameters: gen={generations_val}, pop={population_val}, comp={components_val}"
+                )
+
                 # Try with minimal parameters first
                 try:
                     gp = SymbolicTransformer(
@@ -583,36 +682,49 @@ def run_genetic_feature_discovery_and_umap(
                         function_set=function_set,
                         random_state=42,
                         n_jobs=1,
-                        verbose=0
+                        verbose=0,
                     )
                 except Exception as e:
-                    debug_text.append(f"Failed to create SymbolicTransformer with custom functions: {str(e)}")
+                    debug_text.append(
+                        f"Failed to create SymbolicTransformer with custom functions: {str(e)}"
+                    )
                     # Fallback to basic functions only
                     gp = SymbolicTransformer(
                         generations=generations_val,
                         population_size=population_val,
                         n_components=components_val,
-                        function_set=['add', 'sub', 'mul', 'div'],  # Basic functions only
+                        function_set=[
+                            "add",
+                            "sub",
+                            "mul",
+                            "div",
+                        ],  # Basic functions only
                         random_state=42,
                         n_jobs=1,
-                        verbose=0
+                        verbose=0,
                     )
 
-                debug_text.append(f"Starting genetic programming with {generations_val} generations...")
+                debug_text.append(
+                    f"Starting genetic programming with {generations_val} generations..."
+                )
 
                 # Fit the genetic programming model
                 genetic_features = gp.fit_transform(X_scaled, synthetic_target)
-                
+
                 # Extract expressions from the final generation
                 expressions = []
-                if hasattr(gp, '_programs') and gp._programs:
+                if hasattr(gp, "_programs") and gp._programs:
                     final_programs = gp._programs[-1]  # Get final generation
                     expressions = [str(program) for program in final_programs]
                 else:
                     # Fallback if expressions can't be extracted
-                    expressions = [f"GP_Expression_{i+1}" for i in range(genetic_features.shape[1])]
+                    expressions = [
+                        f"GP_Expression_{i+1}" for i in range(genetic_features.shape[1])
+                    ]
 
-                debug_text.append(f"Generated {genetic_features.shape[1]} genetic features using {len(function_set)} functions")
+                debug_text.append(
+                    f"Generated {genetic_features.shape[1]} genetic features using {len(function_set)} functions"
+                )
 
                 # Create results
                 feature_names = [
@@ -699,6 +811,7 @@ def run_genetic_feature_discovery_and_umap(
             "Error occurred",
             [],
         )
+
 
 @callback(
     Output("run-umap-genetic-status", "children"),

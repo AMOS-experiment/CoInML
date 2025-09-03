@@ -9,37 +9,37 @@ def calculate_adaptive_confidence_score(
     # Enhanced tier definitions with better balance
     tier1_metrics = {
         "silhouette": {
-            "weight": 0.35,  
+            "weight": 0.35,
             "reliability": 0.9,
             "description": "Most reliable cluster quality measure",
-            "min_threshold": 0.2,  
-            "good_threshold": 0.4,  
+            "min_threshold": 0.2,
+            "good_threshold": 0.4,
         },
         "hopkins": {
-            "weight": 0.25,  
+            "weight": 0.25,
             "reliability": 0.85,
             "description": "Fundamental clusterability assessment",
             "min_threshold": 0.5,
-            "good_threshold": 0.7,  
+            "good_threshold": 0.7,
         },
     }
 
     # Tier 2: Useful but context-dependent metrics
     tier2_metrics = {
         "stability": {
-            "weight": 0.15,  
+            "weight": 0.15,
             "reliability": 0.7,
             "description": "Reproducibility under perturbation",
-            "min_threshold": 0.3,  
-            "good_threshold": 0.6,  
+            "min_threshold": 0.3,
+            "good_threshold": 0.6,
             "conditions": ["sufficient_data"],
         },
         "physics_consistency": {
-            "weight": 0.2,  
+            "weight": 0.2,
             "reliability": 0.8,
             "description": "Domain-specific validation",
-            "min_threshold": 0.2,  
-            "good_threshold": 0.5,  
+            "min_threshold": 0.2,
+            "good_threshold": 0.5,
             "conditions": ["physics_relevant"],
         },
         "calinski_harabasz": {
@@ -76,23 +76,26 @@ def calculate_adaptive_confidence_score(
 
     # Calculate confidence with reliability-adjusted weights
     confidence_result = calculate_weighted_confidence(metrics, adaptive_weights)
-    
+
     # Apply bonus for exceptional clustering
     confidence_result = apply_clustering_bonus(confidence_result, metrics)
-    
+
     # Add uncertainty estimation
-    confidence_result['uncertainty'] = calculate_confidence_uncertainty(confidence_result, metrics)
+    confidence_result["uncertainty"] = calculate_confidence_uncertainty(
+        confidence_result, metrics
+    )
 
     # Add validation warnings
-    confidence_result['warnings'] = validate_confidence_score(confidence_result)
-    
+    confidence_result["warnings"] = validate_confidence_score(confidence_result)
 
     # Ensure final confidence respects theoretical maximum
-    confidence_result['overall_confidence'] = min(0.95, confidence_result['overall_confidence'])
+    confidence_result["overall_confidence"] = min(
+        0.95, confidence_result["overall_confidence"]
+    )
 
     # RE-CATEGORIZE confidence level after all adjustments (THIS IS THE KEY FIX)
     final_score = confidence_result["overall_confidence"]
-    
+
     confidence_result["confidence_level"] = categorize_confidence(final_score)
 
     # Add context-aware analysis
@@ -481,16 +484,20 @@ def apply_clustering_bonus(confidence_result, metrics):
 def categorize_confidence(score):
     """Categorize confidence score with realistic thresholds."""
     if score >= 0.8:  # Very rare, reserved for exceptional cases
-        return {"level": "Excellent", "color": "darkgreen", "description": "Exceptionally reliable results"}
-    elif score >= 0.65:  
+        return {
+            "level": "Excellent",
+            "color": "darkgreen",
+            "description": "Exceptionally reliable results",
+        }
+    elif score >= 0.65:
         return {"level": "High", "color": "green", "description": "Reliable results"}
-    elif score >= 0.5:  
+    elif score >= 0.5:
         return {
             "level": "Moderate",
             "color": "orange",
             "description": "Reasonably reliable",
         }
-    elif score >= 0.35:  
+    elif score >= 0.35:
         return {"level": "Low", "color": "red", "description": "Use with caution"}
     else:
         return {
@@ -613,41 +620,47 @@ def get_metric_color(metric_name, value):
             return "red"
     else:
         return "black"
+
+
 def calculate_confidence_uncertainty(confidence_result, metrics):
     """Calculate uncertainty bounds for confidence score."""
-    base_confidence = confidence_result['overall_confidence']
-    
+    base_confidence = confidence_result["overall_confidence"]
+
     # Uncertainty increases with fewer metrics and lower reliability
-    num_metrics = confidence_result['available_metrics']
-    reliability_score = confidence_result['reliability_score']
-    
+    num_metrics = confidence_result["available_metrics"]
+    reliability_score = confidence_result["reliability_score"]
+
     # Base uncertainty (higher with fewer metrics)
     base_uncertainty = 0.1 + max(0, (3 - num_metrics)) * 0.05
-    
+
     # Adjust for reliability
     reliability_adjustment = max(0, (0.8 - reliability_score)) * 0.1
-    
+
     total_uncertainty = base_uncertainty + reliability_adjustment
-    
+
     return {
-        'point_estimate': base_confidence,
-        'lower_bound': max(0, base_confidence - total_uncertainty),
-        'upper_bound': min(0.95, base_confidence + total_uncertainty),
-        'uncertainty': total_uncertainty
+        "point_estimate": base_confidence,
+        "lower_bound": max(0, base_confidence - total_uncertainty),
+        "upper_bound": min(0.95, base_confidence + total_uncertainty),
+        "uncertainty": total_uncertainty,
     }
+
 
 def validate_confidence_score(confidence_result):
     """Validate and warn about potential issues with confidence score."""
     warnings = []
-    
-    if confidence_result['overall_confidence'] > 0.9:
+
+    if confidence_result["overall_confidence"] > 0.9:
         warnings.append("Very high confidence - verify this is justified")
-    
-    if confidence_result['available_metrics'] < 3:
+
+    if confidence_result["available_metrics"] < 3:
         warnings.append("Limited metrics available - confidence may be less reliable")
-    
+
     # Check for bonus stacking
-    if 'bonus_applied' in confidence_result and confidence_result['bonus_applied'] > 0.15:
+    if (
+        "bonus_applied" in confidence_result
+        and confidence_result["bonus_applied"] > 0.15
+    ):
         warnings.append("High bonus applied - may indicate over-optimistic scoring")
-    
+
     return warnings

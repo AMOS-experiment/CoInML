@@ -197,7 +197,7 @@ def update_all_status(
 
     # Handle autoencoder statuses
     elif trigger_id == "train-autoencoder":
-        #statuses[9] = "Training autoencoder... This may take a while."
+        # statuses[9] = "Training autoencoder... This may take a while."
         statuses[9] = "Autoencoder training complete!"
     elif trigger_id == "autoencoder-umap-graph":
         statuses[9] = "Autoencoder training complete!"

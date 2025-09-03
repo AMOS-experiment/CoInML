@@ -816,7 +816,7 @@ def update_scatter_graph15(
                 orientation="h",
                 bgcolor="rgba(255,255,255,0.9)",
                 color="rgba(68,68,68,1)",
-                activecolor="rgba(254,95,85,1)"
+                activecolor="rgba(254,95,85,1)",
             ),  # Add these tools to the modebar
             margin=dict(l=50, r=50, t=50, b=100),  # Increased bottom margin for legend
         )

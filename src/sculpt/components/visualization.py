@@ -330,16 +330,22 @@ def create_basic_viz_tab():
                                                     config={
                                                         "displayModeBar": True,
                                                         "displaylogo": False,
-                                                        "modeBarButtonsToRemove": ["pan2d", "autoScale2d"],
-                                                        "modeBarButtonsToAdd": ["select2d", "lasso2d"],
+                                                        "modeBarButtonsToRemove": [
+                                                            "pan2d",
+                                                            "autoScale2d",
+                                                        ],
+                                                        "modeBarButtonsToAdd": [
+                                                            "select2d",
+                                                            "lasso2d",
+                                                        ],
                                                         "toImageButtonOptions": {
                                                             "format": "png",
                                                             "filename": "plot_export",
                                                             "height": 600,
                                                             "width": 800,
-                                                            "scale": 2
+                                                            "scale": 2,
                                                         },
-                                                        "doubleClick": "reset+autosize"
+                                                        "doubleClick": "reset+autosize",
                                                     },
                                                     style={"height": "600px"},
                                                 ),
@@ -649,16 +655,22 @@ def create_basic_viz_tab():
                                                     config={
                                                         "displayModeBar": True,
                                                         "displaylogo": False,
-                                                        "modeBarButtonsToRemove": ["pan2d", "autoScale2d"],
-                                                        "modeBarButtonsToAdd": ["select2d", "lasso2d"],
+                                                        "modeBarButtonsToRemove": [
+                                                            "pan2d",
+                                                            "autoScale2d",
+                                                        ],
+                                                        "modeBarButtonsToAdd": [
+                                                            "select2d",
+                                                            "lasso2d",
+                                                        ],
                                                         "toImageButtonOptions": {
                                                             "format": "png",
                                                             "filename": "plot_export",
                                                             "height": 600,
                                                             "width": 800,
-                                                            "scale": 2
+                                                            "scale": 2,
                                                         },
-                                                        "doubleClick": "reset+autosize"
+                                                        "doubleClick": "reset+autosize",
                                                     },
                                                     style={"height": "600px"},
                                                 ),

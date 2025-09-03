@@ -1,6 +1,6 @@
 import dash
-from dash import DiskcacheManager
 import diskcache
+from dash import DiskcacheManager
 
 # Initialize cache and background callback manager for Dash 3.2.0
 cache = diskcache.Cache("./cache")

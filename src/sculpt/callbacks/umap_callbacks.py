@@ -14,12 +14,6 @@ from sklearn.metrics import (
     davies_bouldin_score,
     silhouette_score,
 )
-from sculpt.utils.metrics.physics_features import (
-    calculate_physics_features,
-    calculate_physics_features_with_profile,
-    calculate_physics_features_flexible,
-    has_physics_features,
-)
 from sklearn.preprocessing import StandardScaler
 
 from sculpt.utils.metrics.clustering_quality import (
@@ -30,7 +24,12 @@ from sculpt.utils.metrics.clustering_quality import (
 from sculpt.utils.metrics.confidence_assessment import (
     calculate_adaptive_confidence_score,
 )
-from sculpt.utils.metrics.physics_features import calculate_physics_features
+from sculpt.utils.metrics.physics_features import (
+    calculate_physics_features,
+    calculate_physics_features_flexible,
+    calculate_physics_features_with_profile,
+    has_physics_features,
+)
 from sculpt.utils.ui import create_smart_confidence_ui
 
 

@@ -4,7 +4,6 @@ import pandas as pd
 import umap.umap_ as umap
 from dash import Input, Output, State, callback, html
 from dash.dependencies import ALL
-
 from gplearn.functions import make_function
 from gplearn.genetic import SymbolicTransformer
 from sklearn.cluster import DBSCAN, AgglomerativeClustering, KMeans
@@ -80,11 +79,11 @@ def run_genetic_feature_discovery_and_umap(
 
     try:
         # Import required libraries including gplearn
-        from gplearn.genetic import SymbolicTransformer
-        from gplearn.functions import make_function
         import plotly.graph_objects as go
-        from sklearn.decomposition import PCA
+        from gplearn.functions import make_function
+        from gplearn.genetic import SymbolicTransformer
         from sklearn.cluster import KMeans  # Add this import here
+        from sklearn.decomposition import PCA
 
         # Initialize debug info and check which button was clicked
         ctx = dash.callback_context
@@ -218,8 +217,11 @@ def run_genetic_feature_discovery_and_umap(
 
                 # Calculate comprehensive reliability assessment
                 try:
-                    from sculpt.utils.metrics.clustering_quality import cluster_stability, hopkins_statistic
-                    
+                    from sculpt.utils.metrics.clustering_quality import (
+                        cluster_stability,
+                        hopkins_statistic,
+                    )
+
                     # Collect all available metrics
                     all_metrics = {}
                     cluster_labels_for_metrics = gp_df["Cluster"].values

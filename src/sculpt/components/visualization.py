@@ -329,10 +329,17 @@ def create_basic_viz_tab():
                                                     id="umap-graph",
                                                     config={
                                                         "displayModeBar": True,
-                                                        "modeBarButtonsToAdd": [
-                                                            "select2d",
-                                                            "lasso2d",
-                                                        ],
+                                                        "displaylogo": False,
+                                                        "modeBarButtonsToRemove": ["pan2d", "autoScale2d"],
+                                                        "modeBarButtonsToAdd": ["select2d", "lasso2d"],
+                                                        "toImageButtonOptions": {
+                                                            "format": "png",
+                                                            "filename": "plot_export",
+                                                            "height": 600,
+                                                            "width": 800,
+                                                            "scale": 2
+                                                        },
+                                                        "doubleClick": "reset+autosize"
                                                     },
                                                     style={"height": "600px"},
                                                 ),
@@ -641,10 +648,17 @@ def create_basic_viz_tab():
                                                     id="scatter-graph15",
                                                     config={
                                                         "displayModeBar": True,
-                                                        "modeBarButtonsToAdd": [
-                                                            "select2d",
-                                                            "lasso2d",
-                                                        ],
+                                                        "displaylogo": False,
+                                                        "modeBarButtonsToRemove": ["pan2d", "autoScale2d"],
+                                                        "modeBarButtonsToAdd": ["select2d", "lasso2d"],
+                                                        "toImageButtonOptions": {
+                                                            "format": "png",
+                                                            "filename": "plot_export",
+                                                            "height": 600,
+                                                            "width": 800,
+                                                            "scale": 2
+                                                        },
+                                                        "doubleClick": "reset+autosize"
                                                     },
                                                     style={"height": "600px"},
                                                 ),

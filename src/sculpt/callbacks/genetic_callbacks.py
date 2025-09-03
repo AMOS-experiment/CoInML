@@ -5,8 +5,8 @@ import umap.umap_ as umap
 from dash import Input, Output, State, callback, html
 from dash.dependencies import ALL
 
-# from gplearn.functions import make_function
-# from gplearn.genetic import SymbolicTransformer
+from gplearn.functions import make_function
+from gplearn.genetic import SymbolicTransformer
 from sklearn.cluster import DBSCAN, AgglomerativeClustering, KMeans
 from sklearn.metrics import (
     calinski_harabasz_score,
@@ -79,6 +79,12 @@ def run_genetic_feature_discovery_and_umap(
     or run UMAP on previously discovered genetic features."""
 
     try:
+        # Import required libraries including gplearn
+        from gplearn.genetic import SymbolicTransformer
+        from gplearn.functions import make_function
+        import plotly.graph_objects as go
+        from sklearn.decomposition import PCA
+        from sklearn.cluster import KMeans  # Add this import here
 
         # Initialize debug info and check which button was clicked
         ctx = dash.callback_context
@@ -176,141 +182,110 @@ def run_genetic_feature_discovery_and_umap(
                 )
 
                 # Create visualization
-                import plotly.graph_objects as go
-
                 fig = go.Figure()
 
-                # Extract color information from original figure
-                color_map = {}
-                if original_figure and "data" in original_figure:
-                    for trace in original_figure["data"]:
-                        if (
-                            "name" in trace
-                            and "marker" in trace
-                            and "color" in trace["marker"]
-                        ):
-                            clean_name = trace["name"]
-                            if " (" in clean_name:
-                                clean_name = clean_name.split(" (")[0]
-                            color_map[clean_name] = trace["marker"]["color"]
+                unique_files = umap_df["file_label"].unique()
+                colors = ["blue", "red", "green", "orange", "purple", "brown", "pink", "gray"]
 
-                # Add traces for each file label
-                for label in umap_df["file_label"].unique():
-                    mask = umap_df["file_label"] == label
-                    df_subset = umap_df[mask]
-
-                    color = color_map.get(label, None)
-
+                for i, file_label in enumerate(unique_files):
+                    file_data = umap_df[umap_df["file_label"] == file_label]
                     fig.add_trace(
                         go.Scatter(
-                            x=df_subset["UMAP1"],
-                            y=df_subset["UMAP2"],
+                            x=file_data["UMAP1"],
+                            y=file_data["UMAP2"],
                             mode="markers",
-                            marker=dict(size=8, color=color, opacity=0.7),
-                            name=f"{label} ({len(df_subset)} pts)",
+                            name=f"File: {file_label}",
+                            marker=dict(
+                                color=colors[i % len(colors)],
+                                size=6,
+                                opacity=0.7,
+                            ),
+                            text=file_data["Cluster"],
+                            hovertemplate="UMAP1: %{x:.3f}<br>UMAP2: %{y:.3f}<br>Cluster: %{text}<br>File: "
+                            + file_label
+                            + "<extra></extra>",
                         )
                     )
 
-                # Update figure layout
                 fig.update_layout(
-                    height=600,
-                    title=f"UMAP of Selected Genetic Features ({len(gp_selected_features)} features)",
+                    title="UMAP Visualization of Genetic Features",
                     xaxis_title="UMAP1",
                     yaxis_title="UMAP2",
-                    legend_title="Data File",
+                    height=600,
+                    showlegend=True,
+                    hovermode="closest",
                 )
 
-                # Calculate clustering metrics if requested
-                metrics_children = []
-                if selected_metrics:
+                # Calculate comprehensive reliability assessment
+                try:
+                    from sculpt.utils.metrics.clustering_quality import cluster_stability, hopkins_statistic
+                    
+                    # Collect all available metrics
+                    all_metrics = {}
+                    cluster_labels_for_metrics = gp_df["Cluster"].values
+                    unique_clusters = len(np.unique(cluster_labels_for_metrics))
+                    
+                    # Calculate clustering quality metrics
+                    if unique_clusters > 1:
+                        try:
+                            all_metrics["silhouette"] = silhouette_score(umap_result, cluster_labels_for_metrics)
+                        except:
+                            pass
+                            
+                        try:
+                            all_metrics["davies_bouldin"] = davies_bouldin_score(umap_result, cluster_labels_for_metrics)
+                        except:
+                            pass
+                            
+                        try:
+                            all_metrics["calinski_harabasz"] = calinski_harabasz_score(umap_result, cluster_labels_for_metrics)
+                        except:
+                            pass
+                    
+                    # Calculate clusterability metrics
                     try:
-                        X_umap = umap_df[["UMAP1", "UMAP2"]].to_numpy()
-                        scaler = StandardScaler()
-                        X_umap_scaled = scaler.fit_transform(X_umap)
+                        all_metrics["hopkins"] = hopkins_statistic(umap_result)
+                    except:
+                        pass
+                        
+                    # Calculate stability if enough data
+                    if len(umap_result) > 100:
+                        try:
+                            # Use a simple stability calculation
+                            from sklearn.cluster import KMeans
+                            kmeans = KMeans(n_clusters=unique_clusters, random_state=42, n_init=10)
+                            kmeans_labels = kmeans.fit_predict(umap_result)
+                            all_metrics["stability"] = cluster_stability(umap_result, eps=0.1, min_samples=5, n_iterations=3)
+                        except:
+                            pass
+                    
+                    # Calculate comprehensive confidence score
+                    confidence_result = calculate_adaptive_confidence_score(
+                        all_metrics, 
+                        data_characteristics=None, 
+                        clustering_method='genetic_kmeans'
+                    )
+                    
+                    # Create UI using the proper confidence assessment
+                    metrics_children = create_smart_confidence_ui(confidence_result)
+                        
+                except Exception as metric_error:
+                    debug_text.append(f"Reliability assessment failed: {str(metric_error)}")
+                    # Fallback to basic metrics
+                    metrics_children = []
+                    if unique_clusters > 1 and selected_metrics:
+                        try:
+                            if 'silhouette' in selected_metrics:
+                                sil_score = silhouette_score(umap_result, cluster_labels_for_metrics)
+                                metrics_children.append(html.P(f"Silhouette Score: {sil_score:.3f}"))
+                        except:
+                            pass
+                    
+                    if not metrics_children:
+                        metrics_children = [html.P("Basic metrics calculation failed")]
 
-                        # Find optimal DBSCAN parameters
-                        eps_candidates = np.linspace(0.1, 1.0, 10)
-                        best_eps = 0.5
-                        max_clusters = 0
-
-                        for eps in eps_candidates:
-                            dbscan = DBSCAN(eps=eps, min_samples=5)
-                            labels = dbscan.fit_predict(X_umap_scaled)
-                            n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
-                            noise_count = np.sum(labels == -1)
-                            noise_ratio = (
-                                noise_count / len(labels) if len(labels) > 0 else 0
-                            )
-
-                            if (
-                                n_clusters >= 2
-                                and noise_ratio < 0.5
-                                and n_clusters > max_clusters
-                            ):
-                                max_clusters = n_clusters
-                                best_eps = eps
-
-                        # Run DBSCAN with best parameters
-                        dbscan = DBSCAN(eps=best_eps, min_samples=5)
-                        cluster_labels = dbscan.fit_predict(X_umap_scaled)
-
-                        metrics = {}
-                        unique_clusters = set(cluster_labels)
-                        n_clusters = len(unique_clusters) - (
-                            1 if -1 in unique_clusters else 0
-                        )
-                        n_noise = np.sum(cluster_labels == -1)
-                        noise_ratio = (
-                            n_noise / len(cluster_labels)
-                            if len(cluster_labels) > 0
-                            else 0
-                        )
-
-                        if n_clusters >= 2:
-                            mask = cluster_labels != -1
-                            non_noise_points = np.sum(mask)
-                            non_noise_clusters = len(set(cluster_labels[mask]))
-
-                            if (
-                                non_noise_points > non_noise_clusters
-                                and non_noise_clusters > 1
-                            ):
-                                if "silhouette" in selected_metrics:
-                                    metrics["silhouette"] = silhouette_score(
-                                        X_umap_scaled[mask], cluster_labels[mask]
-                                    )
-                                if "davies_bouldin" in selected_metrics:
-                                    metrics["davies_bouldin"] = davies_bouldin_score(
-                                        X_umap_scaled[mask], cluster_labels[mask]
-                                    )
-                                if "calinski_harabasz" in selected_metrics:
-                                    metrics["calinski_harabasz"] = (
-                                        calinski_harabasz_score(
-                                            X_umap_scaled[mask], cluster_labels[mask]
-                                        )
-                                    )
-                                if "hopkins" in selected_metrics:
-                                    metrics["hopkins"] = hopkins_statistic(
-                                        X_umap_scaled
-                                    )
-                                if "stability" in selected_metrics:
-                                    metrics["stability"] = cluster_stability(
-                                        X_umap_scaled, best_eps, 5, n_iterations=3
-                                    )
-
-                        # Create metrics UI
-                        if metrics:
-                            confidence_data = calculate_adaptive_confidence_score(
-                                metrics, clustering_method="dbscan"
-                            )
-                            metrics_children = [
-                                create_smart_confidence_ui(confidence_data)
-                            ]
-
-                    except Exception as e:
-                        metrics_children = [
-                            html.Div(f"Error calculating metrics: {str(e)}")
-                        ]
+                debug_text.append(f"UMAP completed on {X_gp.shape[1]} genetic features")
+                debug_text.append(f"Visualizing {len(umap_df)} data points")
 
                 return (
                     fig,
@@ -322,7 +297,6 @@ def run_genetic_feature_discovery_and_umap(
 
             except Exception as e:
                 import traceback
-
                 trace = traceback.format_exc()
                 error_message = f"Error running UMAP on genetic features: {str(e)}"
                 debug_text.append(error_message)
@@ -360,17 +334,6 @@ def run_genetic_feature_discovery_and_umap(
                 debug_text.append(
                     f"Loaded combined dataset with {len(combined_df)} rows"
                 )
-
-                # TODO: Is this needed?
-                # Load UMAP coordinates if needed
-                # umap_coords = None
-                # if (
-                #     "umap_coords" in combined_data_json
-                #     and combined_data_json["umap_coords"] != "{}"
-                # ):
-                #     umap_coords = pd.read_json(
-                #         combined_data_json["umap_coords"], orient="split"
-                #     )
 
                 # Collect selected features
                 all_selected_features = []
@@ -421,36 +384,39 @@ def run_genetic_feature_discovery_and_umap(
                 debug_text.append(
                     f"Standardized data for analysis, shape: {X_scaled.shape}"
                 )
+                
+                # Add feature mapping for better understanding
+                debug_text.append("Feature mapping (first 10):")
+                for i in range(min(10, len(feature_cols))):
+                    debug_text.append(f"  X{i} = {feature_cols[i]}")
+                if len(feature_cols) > 10:
+                    debug_text.append(f"  ... and {len(feature_cols) - 10} more features")
 
-                # Apply clustering
+                # Apply clustering with proper error handling
                 if clustering_method == "dbscan":
-                    debug_text.append(
-                        f"Running DBSCAN with eps={dbscan_eps}, min_samples={dbscan_min_samples}"
-                    )
-                    clusterer = DBSCAN(
-                        eps=float(dbscan_eps), min_samples=int(dbscan_min_samples)
-                    )
+                    eps_val = float(dbscan_eps) if dbscan_eps is not None else 0.3
+                    min_samples_val = int(dbscan_min_samples) if dbscan_min_samples is not None else 5
+                    
+                    clusterer = DBSCAN(eps=eps_val, min_samples=min_samples_val)
                     cluster_labels = clusterer.fit_predict(X_scaled)
+                    debug_text.append(
+                        f"Applied DBSCAN clustering with eps={eps_val}, min_samples={min_samples_val}"
+                    )
                 elif clustering_method == "kmeans":
-                    debug_text.append(
-                        f"Running KMeans with n_clusters={kmeans_n_clusters}"
-                    )
-                    clusterer = KMeans(
-                        n_clusters=int(kmeans_n_clusters), random_state=42, n_init=10
-                    )
+                    n_clusters_val = int(kmeans_n_clusters) if kmeans_n_clusters is not None else 3
+                    clusterer = KMeans(n_clusters=n_clusters_val, random_state=42, n_init=10)
                     cluster_labels = clusterer.fit_predict(X_scaled)
+                    debug_text.append(f"Applied KMeans clustering with {n_clusters_val} clusters")
                 elif clustering_method == "agglomerative":
-                    debug_text.append("Running Agglomerative clustering")
-                    clusterer = AgglomerativeClustering(
-                        n_clusters=int(agglo_n_clusters), linkage=agglo_linkage
-                    )
+                    n_clusters_val = int(agglo_n_clusters) if agglo_n_clusters is not None else 3
+                    linkage_val = agglo_linkage if agglo_linkage is not None else "ward"
+                    clusterer = AgglomerativeClustering(n_clusters=n_clusters_val, linkage=linkage_val)
                     cluster_labels = clusterer.fit_predict(X_scaled)
-
-                # Handle all noise case
-                if clustering_method == "dbscan" and np.all(cluster_labels == -1):
                     debug_text.append(
-                        "All points were labeled as noise. Using KMeans as fallback."
+                        f"Applied Agglomerative clustering with {n_clusters_val} clusters, linkage={linkage_val}"
                     )
+                else:
+                    debug_text.append("Invalid clustering method specified. Using KMeans as fallback.")
                     clusterer = KMeans(n_clusters=3, random_state=42, n_init=10)
                     cluster_labels = clusterer.fit_predict(X_scaled)
 
@@ -461,64 +427,190 @@ def run_genetic_feature_discovery_and_umap(
                     f"Found {num_clusters} clusters and {num_noise} noise points"
                 )
 
-                # Run feature engineering (fallback approach)
-                debug_text.append("Creating engineered features...")
+                # Handle case where clustering failed (all noise or too few clusters)
+                if num_clusters < 2:
+                    if clustering_method == "dbscan":
+                        debug_text.append("DBSCAN found insufficient clusters. Trying with smaller eps...")
+                        
+                        # Try progressively smaller eps values
+                        for eps_test in [0.1, 0.05, 0.02]:
+                            test_clusterer = DBSCAN(eps=eps_test, min_samples=max(2, min_samples_val//2))
+                            test_labels = test_clusterer.fit_predict(X_scaled)
+                            test_num_clusters = len([label for label in np.unique(test_labels) if label != -1])
+                            
+                            if test_num_clusters >= 2:
+                                cluster_labels = test_labels
+                                debug_text.append(f"Success with eps={eps_test}: found {test_num_clusters} clusters")
+                                break
+                        else:
+                            # If DBSCAN still fails, fall back to KMeans
+                            debug_text.append("DBSCAN failed to find clusters. Falling back to KMeans.")
+                            clusterer = KMeans(n_clusters=3, random_state=42, n_init=10)
+                            cluster_labels = clusterer.fit_predict(X_scaled)
+                    else:
+                        # For KMeans/Agglomerative, this shouldn't happen, but just in case
+                        debug_text.append("Clustering produced insufficient groups. Using KMeans fallback.")
+                        clusterer = KMeans(n_clusters=3, random_state=42, n_init=10)
+                        cluster_labels = clusterer.fit_predict(X_scaled)
 
+                # Verify we have good clustering before proceeding
+                final_unique_labels = np.unique(cluster_labels)
+                final_num_clusters = len([label for label in final_unique_labels if label != -1])
+                final_num_noise = np.sum(cluster_labels == -1) if -1 in final_unique_labels else 0
+
+                debug_text.append(f"Final clustering: {final_num_clusters} clusters, {final_num_noise} noise points")
+
+                # Check if clustering is suitable for genetic programming
+                if final_num_clusters < 2:
+                    return (
+                        empty_fig,
+                        "<br>".join(debug_text + ["Error: Could not find meaningful clusters for genetic programming."]),
+                        empty_store,
+                        "Clustering failed",
+                        empty_metrics,
+                    )
+
+                # Create synthetic target with improved stability
+                pca = PCA(n_components=1)
+                pc1 = pca.fit_transform(X_scaled).flatten()
+
+                # Create a more robust synthetic target
+                if final_num_noise > 0:
+                    # If we have noise points, give them a neutral target value
+                    synthetic_target = pc1.copy()
+                    cluster_means = {}
+                    for cluster_id in final_unique_labels:
+                        if cluster_id != -1:  # Skip noise
+                            mask = cluster_labels == cluster_id
+                            cluster_means[cluster_id] = np.mean(pc1[mask])
+                    
+                    # Assign cluster-specific offsets
+                    for cluster_id, mean_val in cluster_means.items():
+                        mask = cluster_labels == cluster_id
+                        synthetic_target[mask] = pc1[mask] + cluster_id * 5  # Spread clusters apart
+                else:
+                    # No noise points, simpler approach
+                    synthetic_target = pc1 + cluster_labels * 5
+
+                debug_text.append(f"Created synthetic target with shape: {synthetic_target.shape}")
+                debug_text.append(f"Target range: [{synthetic_target.min():.3f}, {synthetic_target.max():.3f}]")
+
+                # Verify we have enough samples for genetic programming
+                min_required_samples = max(10, int(gp_population_size or 1000) // 100)
+                if len(X_scaled) < min_required_samples:
+                    return (
+                        empty_fig,
+                        "<br>".join(debug_text + [f"Error: Need at least {min_required_samples} samples for genetic programming, but only have {len(X_scaled)}."]),
+                        empty_store,
+                        "Insufficient data",
+                        empty_metrics,
+                    )
+
+                # Create custom functions based on selected options
+                function_set = []
+
+                if not gp_functions:
+                    gp_functions = ['basic']  # Default fallback
+
+                if 'basic' in gp_functions:
+                    function_set.extend(['add', 'sub', 'mul', 'div'])
+
+                if 'trig' in gp_functions:
+                    # Add safe trigonometric functions
+                    def safe_sin(x):
+                        return np.sin(np.clip(x, -10, 10))
+                    
+                    def safe_cos(x):
+                        return np.cos(np.clip(x, -10, 10))
+                    
+                    sin_func = make_function(function=safe_sin, name='sin', arity=1)
+                    cos_func = make_function(function=safe_cos, name='cos', arity=1)
+                    function_set.extend([sin_func, cos_func])
+
+                if 'exp_log' in gp_functions:
+                    # Add safe exponential and log functions
+                    def safe_exp(x):
+                        return np.exp(np.clip(x, -10, 10))
+                    
+                    def safe_log(x):
+                        return np.log(np.abs(x) + 1e-6)
+                    
+                    exp_func = make_function(function=safe_exp, name='exp', arity=1)
+                    log_func = make_function(function=safe_log, name='log', arity=1)
+                    function_set.extend([exp_func, log_func])
+
+                if 'sqrt_pow' in gp_functions:
+                    # Add safe sqrt and power functions
+                    def safe_sqrt(x):
+                        return np.sqrt(np.abs(x))
+                    
+                    def safe_pow(x, y):
+                        return np.power(np.abs(x), np.clip(y, -3, 3))
+                    
+                    sqrt_func = make_function(function=safe_sqrt, name='sqrt', arity=1)
+                    pow_func = make_function(function=safe_pow, name='pow', arity=2)
+                    function_set.extend([sqrt_func, pow_func])
+
+                if 'special' in gp_functions:
+                    # Add special functions
+                    def safe_abs(x):
+                        return np.abs(x)
+                    
+                    def safe_inv(x):
+                        return 1.0 / (x + 1e-6)
+                    
+                    abs_func = make_function(function=safe_abs, name='abs', arity=1)
+                    inv_func = make_function(function=safe_inv, name='inv', arity=1)
+                    function_set.extend([abs_func, inv_func])
+
+                debug_text.append(f"Using {len(function_set)} mathematical functions")
+
+                # Use SymbolicTransformer with minimal, safe parameters
+                generations_val = max(5, min(int(gp_generations) if gp_generations is not None else 10, 50))
+                population_val = max(50, min(int(gp_population_size) if gp_population_size is not None else 200, 1000))
+                components_val = max(1, min(int(gp_n_components) if gp_n_components is not None else 5, 10))
+                
+                debug_text.append(f"GP Parameters: gen={generations_val}, pop={population_val}, comp={components_val}")
+                
+                # Try with minimal parameters first
                 try:
-                    from sklearn.decomposition import PCA
-                    from sklearn.feature_selection import (
-                        VarianceThreshold,
-                        mutual_info_regression,
+                    gp = SymbolicTransformer(
+                        generations=generations_val,
+                        population_size=population_val,
+                        n_components=components_val,
+                        function_set=function_set,
+                        random_state=42,
+                        n_jobs=1,
+                        verbose=0
                     )
-                    from sklearn.preprocessing import PolynomialFeatures
-
-                    # Create polynomial features
-                    poly = PolynomialFeatures(
-                        degree=2, include_bias=False, interaction_only=True
-                    )
-                    poly_features = poly.fit_transform(X_scaled)
-
-                    # Limit features
-                    max_features = min(int(gp_n_components), poly_features.shape[1])
-
-                    # Use variance threshold
-                    variance_selector = VarianceThreshold(threshold=0.01)
-                    variance_features = variance_selector.fit_transform(poly_features)
-
-                    # Create synthetic target
-                    pca = PCA(n_components=1)
-                    pc1 = pca.fit_transform(X_scaled).flatten()
-                    synthetic_target = pc1 + cluster_labels * 10
-
-                    # Select by mutual information
-                    mi_scores = mutual_info_regression(
-                        variance_features, synthetic_target, random_state=42
-                    )
-                    top_indices = np.argsort(mi_scores)[-max_features:]
-                    genetic_features = variance_features[:, top_indices]
-
-                    # Create feature names
-                    feature_names_input = [f"X{i}" for i in range(X_scaled.shape[1])]
-                    poly_feature_names = poly.get_feature_names_out(feature_names_input)
-                    variance_feature_names = [
-                        poly_feature_names[i]
-                        for i in range(len(poly_feature_names))
-                        if variance_selector.get_support()[i]
-                    ]
-                    expressions = [variance_feature_names[i] for i in top_indices]
-
-                    debug_text.append(
-                        f"Created {genetic_features.shape[1]} engineered features"
-                    )
-
                 except Exception as e:
-                    debug_text.append(f"Feature engineering failed: {str(e)}")
-                    # Ultimate fallback: use original features
-                    genetic_features = X_scaled[:, : int(gp_n_components)]
-                    expressions = [
-                        f"Original_Feature_{i+1}"
-                        for i in range(genetic_features.shape[1])
-                    ]
+                    debug_text.append(f"Failed to create SymbolicTransformer with custom functions: {str(e)}")
+                    # Fallback to basic functions only
+                    gp = SymbolicTransformer(
+                        generations=generations_val,
+                        population_size=population_val,
+                        n_components=components_val,
+                        function_set=['add', 'sub', 'mul', 'div'],  # Basic functions only
+                        random_state=42,
+                        n_jobs=1,
+                        verbose=0
+                    )
+
+                debug_text.append(f"Starting genetic programming with {generations_val} generations...")
+
+                # Fit the genetic programming model
+                genetic_features = gp.fit_transform(X_scaled, synthetic_target)
+                
+                # Extract expressions from the final generation
+                expressions = []
+                if hasattr(gp, '_programs') and gp._programs:
+                    final_programs = gp._programs[-1]  # Get final generation
+                    expressions = [str(program) for program in final_programs]
+                else:
+                    # Fallback if expressions can't be extracted
+                    expressions = [f"GP_Expression_{i+1}" for i in range(genetic_features.shape[1])]
+
+                debug_text.append(f"Generated {genetic_features.shape[1]} genetic features using {len(function_set)} functions")
 
                 # Create results
                 feature_names = [
@@ -551,8 +643,11 @@ def run_genetic_feature_discovery_and_umap(
                 }
 
                 debug_text.append("Discovered genetic features:")
-                for i, expr in enumerate(expressions):
-                    debug_text.append(f"{feature_names[i]}: {expr}")
+                for i, feat_name in enumerate(feature_names):
+                    if i < len(expressions):
+                        debug_text.append(f"{feat_name}: {expressions[i]}")
+                    else:
+                        debug_text.append(f"{feat_name}: Expression not available")
 
                 return (
                     placeholder_fig,
@@ -568,6 +663,8 @@ def run_genetic_feature_discovery_and_umap(
                 trace = traceback.format_exc()
                 error_message = f"Error in genetic feature discovery: {str(e)}"
                 debug_text.append(error_message)
+                debug_text.append("Full traceback:")
+                debug_text.append(trace)
                 return (
                     empty_fig,
                     "<br>".join(debug_text),
@@ -600,7 +697,6 @@ def run_genetic_feature_discovery_and_umap(
             "Error occurred",
             [],
         )
-
 
 @callback(
     Output("run-umap-genetic-status", "children"),

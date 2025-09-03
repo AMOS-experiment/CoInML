@@ -810,7 +810,14 @@ def update_scatter_graph15(
             legend_title=f"{'Clusters' if color_mode == 'cluster' else 'Data File'}",
             dragmode="lasso",  # Explicitly set lasso as default selection mode
             legend=legend_config,
-            modebar=dict(add=["lasso2d", "select2d"]),  # Add these tools to the modebar
+            modebar=dict(
+                add=["lasso2d", "select2d"],
+                remove=["pan2d", "autoScale2d"],
+                orientation="h",
+                bgcolor="rgba(255,255,255,0.9)",
+                color="rgba(68,68,68,1)",
+                activecolor="rgba(254,95,85,1)"
+            ),  # Add these tools to the modebar
             margin=dict(l=50, r=50, t=50, b=100),  # Increased bottom margin for legend
         )
 

@@ -54,7 +54,7 @@ from dash import Input, Output, callback
     Input("save-genetic-features-btn", "n_clicks"),
     Input("download-genetic-features", "data"),
     Input("run-mi-features", "n_clicks"),
-    Input("mi-features-graph", "figure"),
+    Input("mi-umap-graph", "figure"),
     Input("run-umap-mi", "n_clicks"),
     Input("save-mi-features-btn", "n_clicks"),
     Input("download-mi-features", "data"),
@@ -197,7 +197,8 @@ def update_all_status(
 
     # Handle autoencoder statuses
     elif trigger_id == "train-autoencoder":
-        statuses[9] = "Training autoencoder... This may take a while."
+        #statuses[9] = "Training autoencoder... This may take a while."
+        statuses[9] = "Autoencoder training complete!"
     elif trigger_id == "autoencoder-umap-graph":
         statuses[9] = "Autoencoder training complete!"
 
@@ -232,7 +233,7 @@ def update_all_status(
         statuses[15] = (
             "Running mutual information feature selection... This may take a while."
         )
-    elif trigger_id == "mi-features-graph":
+    elif trigger_id == "mi-umap-graph":
         statuses[15] = "Mutual information feature selection complete!"
 
     # Handle run-umap-mi status

@@ -9,37 +9,37 @@ def calculate_adaptive_confidence_score(
     # Enhanced tier definitions with better balance
     tier1_metrics = {
         "silhouette": {
-            "weight": 0.35,  # Reduced from 0.4
+            "weight": 0.35,  
             "reliability": 0.9,
             "description": "Most reliable cluster quality measure",
-            "min_threshold": 0.2,  # Lowered from 0.3
-            "good_threshold": 0.4,  # Lowered from 0.5
+            "min_threshold": 0.2,  
+            "good_threshold": 0.4,  
         },
         "hopkins": {
-            "weight": 0.25,  # Reduced from 0.3
+            "weight": 0.25,  
             "reliability": 0.85,
             "description": "Fundamental clusterability assessment",
             "min_threshold": 0.5,
-            "good_threshold": 0.7,  # Lowered from 0.75
+            "good_threshold": 0.7,  
         },
     }
 
     # Tier 2: Useful but context-dependent metrics
     tier2_metrics = {
         "stability": {
-            "weight": 0.15,  # Reduced from 0.2
+            "weight": 0.15,  
             "reliability": 0.7,
             "description": "Reproducibility under perturbation",
-            "min_threshold": 0.3,  # Lowered from 0.4
-            "good_threshold": 0.6,  # Lowered from 0.7
+            "min_threshold": 0.3,  
+            "good_threshold": 0.6,  
             "conditions": ["sufficient_data"],
         },
         "physics_consistency": {
-            "weight": 0.2,  # Reduced from 0.3
+            "weight": 0.2,  
             "reliability": 0.8,
             "description": "Domain-specific validation",
-            "min_threshold": 0.2,  # Lowered from 0.3
-            "good_threshold": 0.5,  # Lowered from 0.6
+            "min_threshold": 0.2,  
+            "good_threshold": 0.5,  
             "conditions": ["physics_relevant"],
         },
         "calinski_harabasz": {
@@ -76,9 +76,24 @@ def calculate_adaptive_confidence_score(
 
     # Calculate confidence with reliability-adjusted weights
     confidence_result = calculate_weighted_confidence(metrics, adaptive_weights)
-
+    
     # Apply bonus for exceptional clustering
     confidence_result = apply_clustering_bonus(confidence_result, metrics)
+    
+    # Add uncertainty estimation
+    confidence_result['uncertainty'] = calculate_confidence_uncertainty(confidence_result, metrics)
+
+    # Add validation warnings
+    confidence_result['warnings'] = validate_confidence_score(confidence_result)
+    
+
+    # Ensure final confidence respects theoretical maximum
+    confidence_result['overall_confidence'] = min(0.95, confidence_result['overall_confidence'])
+
+    # RE-CATEGORIZE confidence level after all adjustments (THIS IS THE KEY FIX)
+    final_score = confidence_result["overall_confidence"]
+    
+    confidence_result["confidence_level"] = categorize_confidence(final_score)
 
     # Add context-aware analysis
     confidence_result["analysis"] = analyze_confidence_context(
@@ -244,6 +259,7 @@ def calculate_weighted_confidence(metrics, adaptive_weights):
 
     # Ensure confidence is in valid range [0, 1]
     overall_confidence = np.clip(overall_confidence, 0, 1)
+    overall_confidence = min(0.95, overall_confidence)
 
     # Adjust confidence based on critical thresholds
     adjusted_confidence = apply_critical_thresholds(
@@ -303,7 +319,7 @@ def normalize_metric(metric_name, value):
             return 0.7 + ((value - 0.5) / 0.2) * 0.15
         else:
             # Scale 0.7 to 1.0 → 0.85 to 1.0
-            return 0.85 + ((value - 0.7) / 0.3) * 0.15
+            return min(0.98, 0.85 + ((value - 0.7) / 0.3) * 0.13)
 
     elif metric_name == "hopkins":
         # Hopkins statistic range: [0, 1], higher is better
@@ -313,7 +329,7 @@ def normalize_metric(metric_name, value):
         elif value < 0.7:
             return 0.2 + ((value - 0.5) / 0.2) * 0.3  # Moderate
         else:
-            return 0.5 + ((value - 0.7) / 0.3) * 0.5  # Good to excellent
+            return min(0.98, 0.5 + ((value - 0.7) / 0.3) * 0.48)  # Cap at 0.98
 
     elif metric_name == "stability":
         # Stability range: [0, 1], higher is better
@@ -323,17 +339,17 @@ def normalize_metric(metric_name, value):
         elif value < 0.6:
             return 0.15 + ((value - 0.3) / 0.3) * 0.35
         else:
-            return 0.5 + ((value - 0.6) / 0.4) * 0.5
+            return min(0.98, 0.5 + ((value - 0.6) / 0.4) * 0.48)  # Cap at 0.98
 
     elif metric_name == "physics_consistency":
         # Physics consistency range: [0, 1], higher is better
-        return np.clip(value**0.7, 0, 1)  # Slight curve to be more generous
+        return min(0.98, np.clip(value**0.7, 0, 1))  # Cap at 0.98
 
     elif metric_name == "davies_bouldin":
         # Davies-Bouldin range: [0, ∞], lower is better
         # More reasonable transformation
         if value <= 0.3:
-            return 1.0  # Excellent
+            return 0.98  # Excellent - cap at 0.98
         elif value <= 0.5:
             return 0.9 - (value - 0.3) * 0.5  # Very good
         elif value <= 1.0:
@@ -353,13 +369,13 @@ def normalize_metric(metric_name, value):
         else:
             # Log scale that's more generous
             log_val = np.log1p(value / 10)  # log(1 + value/10)
-            return np.tanh(log_val / 3)  # Smoother curve
+            return min(0.98, np.tanh(log_val / 3))  # Cap at 0.98
 
     elif metric_name == "noise_ratio":
         # Noise ratio range: [0, 1], lower is better
         # More tolerance for noise
         if value < 0.1:
-            return 1.0  # Excellent
+            return 0.98  # Excellent - cap at 0.98
         elif value < 0.2:
             return 0.9 - (value - 0.1) * 2  # Good
         elif value < 0.4:
@@ -372,7 +388,7 @@ def normalize_metric(metric_name, value):
         print(
             f"DEBUG normalize_metric: Unknown metric {metric_name}, using default normalization"
         )
-        return np.clip(value, 0, 1)
+        return min(0.98, np.clip(value, 0, 1))  # Cap at 0.98
 
 
 def apply_critical_thresholds(confidence, components):
@@ -416,7 +432,10 @@ def apply_critical_thresholds(confidence, components):
         exceptional_count += 1
 
     if exceptional_count >= 2:
-        confidence = min(1.0, confidence * 1.15)  # 15% boost
+        # Use asymptotic scaling instead of multiplicative boost
+        boost_factor = 0.1 * (exceptional_count / 3)  # Max 0.1 boost for 3 metrics
+        confidence = confidence + (1 - confidence) * boost_factor
+        confidence = min(0.95, confidence)  # Cap at 0.95, reserve 1.0 for perfection
 
     return confidence
 
@@ -450,7 +469,8 @@ def apply_clustering_bonus(confidence_result, metrics):
     # Apply bonus with cap
     if bonus > 0:
         original_confidence = confidence_result["overall_confidence"]
-        new_confidence = min(1.0, original_confidence + bonus)
+        asymptotic_bonus = bonus * (0.95 - original_confidence) / 0.95
+        new_confidence = min(0.95, original_confidence + asymptotic_bonus)
         confidence_result["overall_confidence"] = new_confidence
         confidence_result["bonus_applied"] = bonus
         confidence_result["bonus_reasons"] = bonus_reasons
@@ -459,22 +479,18 @@ def apply_clustering_bonus(confidence_result, metrics):
 
 
 def categorize_confidence(score):
-    """Categorize confidence score with more generous thresholds."""
-    if score >= 0.8:  # Lowered from 0.85
-        return {
-            "level": "Excellent",
-            "color": "darkgreen",
-            "description": "Very reliable results",
-        }
-    elif score >= 0.65:  # Lowered from 0.7
+    """Categorize confidence score with realistic thresholds."""
+    if score >= 0.8:  # Very rare, reserved for exceptional cases
+        return {"level": "Excellent", "color": "darkgreen", "description": "Exceptionally reliable results"}
+    elif score >= 0.65:  
         return {"level": "High", "color": "green", "description": "Reliable results"}
-    elif score >= 0.5:  # Lowered from 0.55
+    elif score >= 0.5:  
         return {
             "level": "Moderate",
             "color": "orange",
             "description": "Reasonably reliable",
         }
-    elif score >= 0.35:  # Lowered from 0.4
+    elif score >= 0.35:  
         return {"level": "Low", "color": "red", "description": "Use with caution"}
     else:
         return {
@@ -597,3 +613,41 @@ def get_metric_color(metric_name, value):
             return "red"
     else:
         return "black"
+def calculate_confidence_uncertainty(confidence_result, metrics):
+    """Calculate uncertainty bounds for confidence score."""
+    base_confidence = confidence_result['overall_confidence']
+    
+    # Uncertainty increases with fewer metrics and lower reliability
+    num_metrics = confidence_result['available_metrics']
+    reliability_score = confidence_result['reliability_score']
+    
+    # Base uncertainty (higher with fewer metrics)
+    base_uncertainty = 0.1 + max(0, (3 - num_metrics)) * 0.05
+    
+    # Adjust for reliability
+    reliability_adjustment = max(0, (0.8 - reliability_score)) * 0.1
+    
+    total_uncertainty = base_uncertainty + reliability_adjustment
+    
+    return {
+        'point_estimate': base_confidence,
+        'lower_bound': max(0, base_confidence - total_uncertainty),
+        'upper_bound': min(0.95, base_confidence + total_uncertainty),
+        'uncertainty': total_uncertainty
+    }
+
+def validate_confidence_score(confidence_result):
+    """Validate and warn about potential issues with confidence score."""
+    warnings = []
+    
+    if confidence_result['overall_confidence'] > 0.9:
+        warnings.append("Very high confidence - verify this is justified")
+    
+    if confidence_result['available_metrics'] < 3:
+        warnings.append("Limited metrics available - confidence may be less reliable")
+    
+    # Check for bonus stacking
+    if 'bonus_applied' in confidence_result and confidence_result['bonus_applied'] > 0.15:
+        warnings.append("High bonus applied - may indicate over-optimistic scoring")
+    
+    return warnings

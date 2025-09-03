@@ -1,4 +1,12 @@
 import dash
+from dash import DiskcacheManager
+import diskcache
+
+# Initialize cache and background callback manager for Dash 3.2.0
+cache = diskcache.Cache("./cache")
+background_callback_manager = DiskcacheManager(cache)
+
+print("Successfully initialized DiskcacheManager for background callbacks")
 
 from sculpt.callbacks.autoencoder_callbacks import (  # noqa: F401
     calculate_features_after_assignment,
@@ -105,11 +113,12 @@ mass_ion = 2 * 1836  # Deuterium ion (D+)
 mass_neutral = 16 * 1836  # Neutral Oxygen atom
 mass_electron = 1  # Electron mass
 
-app = dash.Dash(__name__, suppress_callback_exceptions=True)
+app = dash.Dash(__name__, suppress_callback_exceptions=True, background_callback_manager=background_callback_manager)
 app.title = "Supervised Clustering and Uncovering Latent Patterns with Training SCULPT"
 
 app.layout = create_layout()
 
 
 if __name__ == "__main__":
-    app.run_server(debug=True, port=9000)
+    app.run(debug=True, port=9000)
+    #app.run_server(debug=True, port=9000)

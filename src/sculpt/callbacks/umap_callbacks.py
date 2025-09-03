@@ -14,6 +14,12 @@ from sklearn.metrics import (
     davies_bouldin_score,
     silhouette_score,
 )
+from sculpt.utils.metrics.physics_features import (
+    calculate_physics_features,
+    calculate_physics_features_with_profile,
+    calculate_physics_features_flexible,
+    has_physics_features,
+)
 from sklearn.preprocessing import StandardScaler
 
 from sculpt.utils.metrics.clustering_quality import (
@@ -48,6 +54,8 @@ from sculpt.utils.ui import create_smart_confidence_ui
     State("heatmap-bandwidth", "value"),
     State("heatmap-colorscale", "value"),
     State("show-points-overlay", "value"),
+    State("file-config-assignments-store", "data"),
+    State("configuration-profiles-store", "data"),    
     prevent_initial_call=True,
 )
 def update_umap(
@@ -65,7 +73,9 @@ def update_umap(
     heatmap_bandwidth,
     heatmap_colorscale,
     show_points_overlay,
-):
+    assignments_store,
+    profiles_store,
+    ):
     """Compute UMAP embedding on selected files using selected features."""
     if not stored_files:
         return {}, "No files uploaded.", {}, [html.Div("No files uploaded.")]
@@ -105,25 +115,37 @@ def update_umap(
                         else:
                             debug_str += f"Warning: Selection file {f['filename']} is missing required columns.<br>"
                     else:
-                        # Regular COLTRIMS file
-                        df["file_label"] = f["filename"]  # Add file name as a label
-
-                        # Calculate physics features for this file's data
-                        df_with_features = calculate_physics_features(df)
-
-                        # Sample the data to reduce processing time
-                        sample_size = max(
-                            int(len(df_with_features) * sample_frac), 100
-                        )  # Ensure at least 100 points
-                        if len(df_with_features) > sample_size:
-                            sampled = df_with_features.sample(
-                                n=sample_size, random_state=42
-                            )
-                        else:
-                            sampled = df_with_features
-
-                        debug_str += f"{f['filename']}: {len(df)} events, sampled {len(sampled)}.<br>"
-                        sampled_dfs.append(sampled)
+                        # Regular COLTRIMS file - apply configuration-aware physics features
+                        df['file_label'] = f['filename']  # Add file name as a label
+                        
+                        # Check if physics features already exist, if not calculate them
+                        if not has_physics_features(df):
+                            # Get profile assignment for this file
+                            profile_name = assignments_store.get(f['filename']) if assignments_store else None
+                            
+                            if profile_name and profile_name != 'none' and profiles_store and profile_name in profiles_store:
+                                # Calculate with assigned profile
+                                profile_config = profiles_store[profile_name]
+                                try:
+                                    df = calculate_physics_features_with_profile(df, profile_config)
+                                    debug_str += f"Applied profile '{profile_name}' to {f['filename']}<br>"
+                                except Exception as e:
+                                    debug_str += f"Error applying profile to {f['filename']}: {str(e)}<br>"
+                                    # Fallback to flexible calculation
+                                    df = calculate_physics_features_flexible(df, None)
+                            else:
+                                # No profile assigned, use flexible calculation
+                                df = calculate_physics_features_flexible(df, None)
+                                if assignments_store:
+                                    debug_str += f"No profile assigned for {f['filename']}, using default calculation<br>"
+                        
+                        # Sample the data
+                        sample_size = int(len(df) * sample_frac)
+                        if sample_size > 0 and sample_size < len(df):
+                            df = df.sample(n=sample_size, random_state=42).reset_index(drop=True)
+                        
+                        sampled_dfs.append(df)
+                        debug_str += f"{f['filename']}: {len(df)} events after sampling.<br>"
                 except Exception as e:
                     debug_str += f"Error processing {f['filename']}: {str(e)}.<br>"
 
@@ -465,7 +487,14 @@ def update_umap(
             legend_title=f"{'Clusters' if color_mode == 'cluster' else 'Data File'}",
             dragmode="lasso",
             legend=legend_config,
-            modebar=dict(add=["lasso2d", "select2d"]),
+            modebar=dict(
+                add=["lasso2d", "select2d"],
+                remove=["pan2d", "autoScale2d"],
+                orientation="h",
+                bgcolor="rgba(255,255,255,0.9)",
+                color="rgba(68,68,68,1)",
+                activecolor="rgba(254,95,85,1)"
+            ),
             margin=dict(l=50, r=50, t=50, b=100),  # Increased bottom margin for legend
         )
 

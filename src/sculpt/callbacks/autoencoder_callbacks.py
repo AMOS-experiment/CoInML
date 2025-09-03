@@ -45,12 +45,12 @@ from sculpt.utils.ui import create_feature_categories_ui
     State("autoencoder-latent-store", "data"),
     State("metric-selector-autoencoder", "value"),
     State("genetic-features-store", "data"),
-    background=True,
-    running=[
-        (Output("train-autoencoder", "disabled"), True, False),
-        (Output("training-progress", "children"), "Training...", ""),
-    ],
-    progress=[Output("training-progress", "children")],
+    #background=True,
+    #running=[
+    #    (Output("train-autoencoder", "disabled"), True, False),
+    #    (Output("training-progress", "children"), "Training...", ""),
+    #],
+    #progress=[Output("training-progress", "children")],
     prevent_initial_call=True,
 )
 def train_autoencoder_and_run_umap(
@@ -72,9 +72,25 @@ def train_autoencoder_and_run_umap(
     latent_store,
     selected_metrics,
     genetic_features_store,
-    set_progress,
+    #set_progress,
 ):
     """Train autoencoder and run UMAP on latent space with genetic features support."""
+
+    # ADD THE DEBUG CODE RIGHT HERE (before the try block)
+    print("\n" + "="*50)
+    print("🔍 AUTOENCODER DEBUG")
+    print("="*50)
+    print(f"combined_data_json: {combined_data_json}")
+    
+    if combined_data_json:
+        for key, value in combined_data_json.items():
+            print(f"  {key}: {type(value)}")
+            if key == "combined_df":
+                print(f"    combined_df value: {value}")
+                print(f"    Is empty string: {value == '{}'}")
+    
+    print("="*50)
+
     try:
         # Import required libraries
         import numpy as np
@@ -100,23 +116,15 @@ def train_autoencoder_and_run_umap(
         feature_importance_container = []
 
         # Load the combined dataframe - do this regardless of training or not
-        if (
-            combined_data_json
-            and "combined_df" in combined_data_json
-            and combined_data_json["combined_df"] != "{}"
-        ):
-            combined_df = pd.read_json(
-                combined_data_json["combined_df"], orient="split"
-            )
+        if combined_data_json and "combined_df" in combined_data_json and combined_data_json["combined_df"] != "{}":
+            combined_df = pd.read_json(combined_data_json["combined_df"], orient='split')
+            print(f"✅ SUCCESS: Loaded DataFrame with shape {combined_df.shape}")
             debug_text.append(f"Loaded combined dataset with {len(combined_df)} rows")
         else:
-            return (
-                {},
-                "No combined dataset available. Please run UMAP first.",
-                {},
-                [],
-                [],
-            )
+            print("❌ FAILED: combined_df is empty or missing")
+            if combined_data_json and "combined_df" in combined_data_json:
+                print(f"combined_df value: {combined_data_json['combined_df']}")
+            return {}, "No combined dataset available. Please run UMAP first.", {}, [], []
 
         # Check if we need to train the autoencoder or just run UMAP on existing latent space
         if trigger_id == "run-umap-latent" and latent_store:
@@ -274,7 +282,7 @@ def train_autoencoder_and_run_umap(
             debug_text.append(f"Using device: {device}")
 
             # Initialize model
-            input_dim = len(feature_cols)
+            input_dim = feature_data.shape[1]
             model = DeepAutoencoder(input_dim=input_dim, latent_dim=int(latent_dim)).to(
                 device
             )
@@ -290,7 +298,7 @@ def train_autoencoder_and_run_umap(
             debug_text.append(f"Starting training for {num_epochs} epochs...")
 
             for epoch in range(num_epochs):
-                set_progress(f"Training progress: Epoch {epoch + 1}/{num_epochs}")
+                #set_progress(f"Training progress: Epoch {epoch + 1}/{num_epochs}")
                 total_loss = 0
                 model.train()
 
@@ -359,6 +367,7 @@ def train_autoencoder_and_run_umap(
                         "height": 600,
                     },
                 }
+                debug_text.append("Training complete! Ready for UMAP visualization.")
                 return placeholder_fig, "<br>".join(debug_text), latent_store, [], []
 
         else:
@@ -1295,31 +1304,35 @@ def train_autoencoder_and_run_umap(
     Output("feature-combination-summary", "children"),
     Input("genetic-features-store", "data"),
     Input({"type": "feature-selector-autoencoder", "category": ALL}, "value"),
-    State(
-        {"type": "genetic-feature-selector-autoencoder", "category": ALL}, "value"
-    ),  # Changed to State
+    Input({"type": "genetic-feature-selector-autoencoder", "category": ALL}, "value"),  # ✅ FIX: Input
     prevent_initial_call=True,
 )
 def update_autoencoder_genetic_features(
     genetic_features_store, selected_original_features, selected_genetic_features
 ):
     """Update genetic features display in autoencoder section and show combination summary."""
-
+    
+    print(f"DEBUG: Genetic features callback triggered")
+    print(f"DEBUG: selected_original_features = {selected_original_features}")
+    print(f"DEBUG: selected_genetic_features = {selected_genetic_features}")
+    
     # Handle genetic features display
     genetic_ui = []
-    # available_genetic_features = []       # TODO: Check if needed
 
-    # Preserve currently selected genetic features
+    # 🔧 FIX: Properly collect currently selected genetic features
     current_genetic_selection = []
     if selected_genetic_features:
         for features in selected_genetic_features:
-            if features:
+            if features and isinstance(features, list):
                 current_genetic_selection.extend(features)
+            elif features:  # Handle case where it's a single item, not a list
+                current_genetic_selection.append(features)
+
+    print(f"DEBUG: current_genetic_selection = {current_genetic_selection}")
 
     if genetic_features_store and "feature_names" in genetic_features_store:
         feature_names = genetic_features_store["feature_names"]
         expressions = genetic_features_store.get("expressions", [])
-        # available_genetic_features = feature_names    # TODO: Check if needed
 
         # Create checklist for genetic features with preserved selections
         genetic_ui = [
@@ -1347,10 +1360,14 @@ def update_autoencoder_genetic_features(
                     }
                     for i, feat in enumerate(feature_names)
                 ],
-                value=current_genetic_selection,  # Preserve selections
+                value=current_genetic_selection,  # This will now properly preserve selections
                 labelStyle={"display": "block", "marginBottom": "8px"},
             )
         ]
+        
+        print(f"DEBUG: Created genetic UI with {len(feature_names)} features")
+        print(f"DEBUG: Preserved {len(current_genetic_selection)} selections")
+        
     else:
         genetic_ui = [
             html.Div(
@@ -1365,16 +1382,21 @@ def update_autoencoder_genetic_features(
                 style={"color": "gray", "fontStyle": "italic"},
             )
         ]
+        print(f"DEBUG: No genetic features available")
 
-    # Create combination summary
+    # 🔧 FIX: Create more accurate combination summary
     all_original_features = []
     for features in selected_original_features:
-        if features:
+        if features and isinstance(features, list):
             all_original_features.extend(features)
+        elif features:  # Handle single items
+            all_original_features.append(features)
 
-    all_genetic_features = current_genetic_selection  # Use preserved selection
+    all_genetic_features = current_genetic_selection
 
     total_features = len(all_original_features) + len(all_genetic_features)
+
+    print(f"DEBUG: Summary - Original: {len(all_original_features)}, Genetic: {len(all_genetic_features)}, Total: {total_features}")
 
     summary_content = []
     if total_features > 0:
@@ -1393,75 +1415,38 @@ def update_autoencoder_genetic_features(
                     html.Br(),
                     html.Span(
                         f"• Genetic features: {len(all_genetic_features)}",
-                        style={"fontSize": "11px"},
+                        style={"fontSize": "11px", "fontWeight": "bold" if len(all_genetic_features) > 0 else "normal"},
                     ),
                     html.Br(),
                     html.Span(
                         f"• Total input features: {total_features}",
                         style={"fontSize": "11px", "fontWeight": "bold"},
                     ),
-                ]
+                ],
+                style={"color": "black"},
             )
         ]
-
-        if len(all_original_features) > 0:
-            summary_content.append(html.Br())
-            summary_content.append(
-                html.Details(
-                    [
-                        html.Summary(
-                            "Original features",
-                            style={"fontSize": "11px", "cursor": "pointer"},
-                        ),
-                        html.Div(
-                            [
-                                html.Span(f"• {feat}", style={"fontSize": "10px"})
-                                for feat in all_original_features[:10]  # Show first 10
-                            ]
-                            + (
-                                [
-                                    html.Span(
-                                        f"... and {len(all_original_features)-10} more",
-                                        style={
-                                            "fontSize": "10px",
-                                            "fontStyle": "italic",
-                                        },
-                                    )
-                                ]
-                                if len(all_original_features) > 10
-                                else []
-                            )
-                        ),
-                    ]
-                )
-            )
-
+        
+        # 🔧 NEW: Add detailed breakdown for debugging
         if len(all_genetic_features) > 0:
-            summary_content.append(html.Br())
             summary_content.append(
-                html.Details(
-                    [
-                        html.Summary(
-                            "Genetic features",
-                            style={"fontSize": "11px", "cursor": "pointer"},
-                        ),
-                        html.Div(
-                            [
-                                html.Span(f"• {feat}", style={"fontSize": "10px"})
-                                for feat in all_genetic_features
-                            ]
-                        ),
-                    ]
-                )
+                html.Div([
+                    html.Br(),
+                    html.Span(
+                        f"Selected genetic features: {', '.join(all_genetic_features[:3])}{'...' if len(all_genetic_features) > 3 else ''}",
+                        style={"fontSize": "10px", "color": "gray"}
+                    )
+                ])
             )
     else:
         summary_content = [
             html.Div(
                 "Select features above to see combination summary",
-                style={"color": "gray", "fontSize": "12px", "fontStyle": "italic"},
+                style={"color": "gray", "fontSize": "12px"}
             )
         ]
 
+    print(f"DEBUG: Returning genetic UI and summary")
     return genetic_ui, summary_content
 
 

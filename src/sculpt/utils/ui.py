@@ -38,6 +38,18 @@ def create_smart_confidence_ui(confidence_data):
                                     "marginRight": "15px",
                                 },
                             ),
+                            # Uncertainty display - properly formatted
+                            (
+                                html.Div([
+                                    html.Span("±", style={"fontSize": "16px", "color": "gray", "marginRight": "2px"}),
+                                    html.Span(
+                                        f"{confidence_data['uncertainty']['uncertainty']:.2f}",
+                                        style={"fontSize": "16px", "color": "gray", "marginRight": "15px"}
+                                    )
+                                ], style={"display": "inline-flex", "alignItems": "center"})
+                                if 'uncertainty' in confidence_data 
+                                else html.Div()
+                            ),
                             html.Div(
                                 [
                                     html.Div(
@@ -185,7 +197,36 @@ def create_smart_confidence_ui(confidence_data):
                         ),
                     ]
                 )
-            ),  # Added missing comma here
+            ),
+            # Warnings section (new addition)
+            (
+                html.Div(
+                    [
+                        html.H6(
+                            "⚠️ Warnings",
+                            style={
+                                "fontSize": "12px",
+                                "color": "#d32f2f",
+                                "marginTop": "12px",
+                                "marginBottom": "5px",
+                                "fontWeight": "bold",
+                            },
+                        ),
+                        html.Ul(
+                            [
+                                html.Li(
+                                    warning,
+                                    style={"fontSize": "11px", "marginBottom": "2px", "color": "#d32f2f"},
+                                )
+                                for warning in confidence_data.get("warnings", [])
+                            ],
+                            style={"paddingLeft": "15px", "margin": "0"},
+                        ),
+                    ]
+                )
+                if confidence_data.get("warnings")
+                else html.Div()
+            ),
             # Metric explanations tooltip
             html.Div(
                 [
@@ -240,16 +281,14 @@ def create_smart_confidence_ui(confidence_data):
         },
     )
 
-
 def create_confidence_bar(score, color):
     """Create a segmented confidence bar."""
-
     segments = [
         {"threshold": 0.0, "color": "#d32f2f", "label": "Very Low"},
-        {"threshold": 0.4, "color": "#f57c00", "label": "Low"},
-        {"threshold": 0.55, "color": "#fbc02d", "label": "Moderate"},
-        {"threshold": 0.7, "color": "#689f38", "label": "High"},
-        {"threshold": 0.85, "color": "#388e3c", "label": "Excellent"},
+        {"threshold": 0.35, "color": "#f57c00", "label": "Low"},
+        {"threshold": 0.5, "color": "#fbc02d", "label": "Moderate"},
+        {"threshold": 0.65, "color": "#689f38", "label": "High"},
+        {"threshold": 0.8, "color": "#388e3c", "label": "Excellent"},
     ]
 
     bar_segments = []

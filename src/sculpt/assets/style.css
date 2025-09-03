@@ -132,3 +132,67 @@ button:active {
 ::-webkit-scrollbar-thumb:hover {
     background: #555;
 }
+
+/* Mac-specific modebar fixes for Plotly graphs */
+.modebar {
+    position: relative !important;
+    z-index: 1000 !important;
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    border: 1px solid #ddd !important;
+    border-radius: 4px !important;
+}
+
+/* Ensure lasso and select tools are visible */
+.modebar-btn[data-title*="lasso"],
+.modebar-btn[data-title*="Box Select"],
+.modebar-btn[data-title*="Lasso Select"] {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: all !important;
+}
+
+/* Fix for Safari/WebKit specific issues */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+    .modebar-group {
+        display: flex !important;
+        flex-direction: row !important;
+    }
+    
+    .modebar-btn {
+        min-width: 24px !important;
+        min-height: 24px !important;
+    }
+}
+
+/* Ensure proper spacing between toolbar groups */
+.modebar-group + .modebar-group {
+    margin-left: 4px;
+}
+
+/* Fix for high DPI displays common on Mac */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .modebar-btn svg {
+        width: 16px !important;
+        height: 16px !important;
+    }
+}
+
+/* Fix toolbar positioning - move to top right */
+.modebar {
+    position: absolute !important;
+    top: 10px !important;
+    right: 10px !important;
+    left: auto !important;
+    z-index: 1001 !important;
+}
+
+/* Ensure the graph container allows for absolute positioning */
+.js-plotly-plot {
+    position: relative !important;
+}
+
+/* Add some top margin to plot titles to avoid overlap */
+.gtitle {
+    margin-top: 40px !important;
+}

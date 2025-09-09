@@ -729,7 +729,11 @@ def update_umap_selected_only(
         if original_figure and "data" in original_figure:
             for trace in original_figure["data"]:
                 if "name" in trace and "marker" in trace and "color" in trace["marker"]:
-                    color_map[trace["name"]] = trace["marker"]["color"]
+                    # Clean the trace name to remove point count
+                    clean_name = trace["name"]
+                    if " (" in clean_name:
+                        clean_name = clean_name.split(" (")[0]
+                    color_map[clean_name] = trace["marker"]["color"]
 
         # Create figure with consistent colors
         fig = go.Figure()
@@ -764,7 +768,7 @@ def update_umap_selected_only(
                         y=df_subset["UMAP2"],
                         mode="markers",
                         marker=dict(size=8, color=marker_color, opacity=0.7),
-                        name=label,
+                        name=f"{label} ({len(df_subset)} pts)",
                     )
                 )
             else:
@@ -775,7 +779,7 @@ def update_umap_selected_only(
                         y=df_subset["UMAP2"],
                         mode="markers",
                         marker=dict(size=8, opacity=0.7),
-                        name=label,
+                        name=f"{label} ({len(df_subset)} pts)",
                     )
                 )
 
@@ -993,7 +997,10 @@ def update_umap_selected_run(
         if original_figure and "data" in original_figure:
             for trace in original_figure["data"]:
                 if "name" in trace and "marker" in trace and "color" in trace["marker"]:
-                    color_map[trace["name"]] = trace["marker"]["color"]
+                    clean_name = trace["name"]
+                    if " (" in clean_name:
+                        clean_name = clean_name.split(" (")[0]
+                    color_map[clean_name] = trace["marker"]["color"]
 
         # Create figure with consistent colors
         fig = go.Figure()
@@ -1028,7 +1035,7 @@ def update_umap_selected_run(
                         y=df_subset["UMAP2"],
                         mode="markers",
                         marker=dict(size=8, color=marker_color, opacity=0.7),
-                        name=label,
+                        name=f"{label} ({len(df_subset)} pts)",
                     )
                 )
             else:
@@ -1039,7 +1046,7 @@ def update_umap_selected_run(
                         y=df_subset["UMAP2"],
                         mode="markers",
                         marker=dict(size=8, opacity=0.7),
-                        name=label,
+                        name=f"{label} ({len(df_subset)} pts)",
                     )
                 )
 

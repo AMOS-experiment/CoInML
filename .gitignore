@@ -188,3 +188,5 @@ cython_debug/
 src/BACKUP_*/
 src/sculpt-backup-*/
 src/sculpt copy/
+BACKUP_*/
+*.backup

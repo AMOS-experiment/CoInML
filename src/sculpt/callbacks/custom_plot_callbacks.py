@@ -3,12 +3,12 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from dash import ALL, Input, Output, State, callback, callback_context, html, no_update
-from sculpt.utils.unit_converter import convert_feature_for_display, format_axis_title
 
 from sculpt.utils.metrics.physics_features import (
     calculate_physics_features_with_profile,
     has_physics_features,
 )
+from sculpt.utils.unit_converter import convert_feature_for_display, format_axis_title
 
 
 @callback(

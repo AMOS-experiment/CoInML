@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from dash import ALL, Input, Output, State, callback, callback_context, html, no_update
-from sculpt.utils.unit_converter import convert_feature_for_display, format_axis_title
 
 from sculpt.utils.metrics.physics_features import (
     calculate_physics_features_with_profile,
@@ -332,14 +331,7 @@ def update_custom_feature_plot(
                     if name not in color_map:  # Don't overwrite existing colors
                         color_map[name] = trace["marker"]["color"]
 
-        # Step 6: Apply unit conversions
-        # ------------------------------------------------------------
-        x_converted, x_unit = convert_feature_for_display(df_to_plot["x"], x_feature)
-        y_converted, y_unit = convert_feature_for_display(df_to_plot["y"], y_feature)
-        df_to_plot["x_converted"] = x_converted
-        df_to_plot["y_converted"] = y_converted
-
-        # Step 7: Create the plot
+        # Step 6: Create the plot
         # ------------------------------------------------------------
         import plotly.graph_objects as go
 
@@ -361,8 +353,8 @@ def update_custom_feature_plot(
 
                     fig.add_trace(
                         go.Scatter(
-                            x=points["x_converted"],
-                            y=points["y_converted"],
+                            x=points["x"],
+                            y=points["y"],
                             mode="markers",
                             marker=dict(
                                 size=8,
@@ -380,20 +372,20 @@ def update_custom_feature_plot(
 
                 fig.add_trace(
                     go.Scatter(
-                        x=points["x_converted"],
-                        y=points["y_converted"],
+                        x=points["x"],
+                        y=points["y"],
                         mode="markers",
                         marker=dict(size=8, color=color_map.get(label), opacity=0.7),
                         name=f"{label} ({len(points)} pts)",
                     )
                 )
 
-        # Update layout with converted units
+        # Update layout
         fig.update_layout(
             height=600,
-            title=f"Custom Feature Plot: {format_axis_title(x_feature, x_unit)} vs {format_axis_title(y_feature, y_unit)}",
-            xaxis_title=format_axis_title(x_feature, x_unit),
-            yaxis_title=format_axis_title(y_feature, y_unit),
+            title=f"Custom Feature Plot: {x_feature} vs {y_feature}",
+            xaxis_title=x_feature,
+            yaxis_title=y_feature,
             legend_title="Data Source",
         )
 
@@ -531,12 +523,6 @@ def update_scatter_graph15(
         if x_feature not in combined_df.columns or y_feature not in combined_df.columns:
             return {}, f"Features {x_feature} or {y_feature} not found in dataset.", []
 
-        # Apply unit conversions to the entire dataset
-        x_converted, x_unit = convert_feature_for_display(combined_df[x_feature], x_feature)
-        y_converted, y_unit = convert_feature_for_display(combined_df[y_feature], y_feature)
-        combined_df['x_converted'] = x_converted
-        combined_df['y_converted'] = y_converted
-
         # Apply DBSCAN for cluster coloring (if needed)
         cluster_labels = None
         best_eps = 0.5  # Default value
@@ -544,8 +530,8 @@ def update_scatter_graph15(
         if color_mode == "cluster":
             debug_text.append("Applying DBSCAN clustering for coloring")
 
-            # Extract only the two features we're plotting (use converted values)
-            X_features = combined_df[['x_converted', 'y_converted']].to_numpy()
+            # Extract only the two features we're plotting
+            X_features = combined_df[[x_feature, y_feature]].to_numpy()
 
             # Handle NaN/inf values
             X_features = np.nan_to_num(X_features, nan=0.0, posinf=0.0, neginf=0.0)
@@ -638,9 +624,9 @@ def update_scatter_graph15(
         if visualization_type == "heatmap":
             from scipy.stats import gaussian_kde
 
-            # Get converted coordinates for heatmap
-            x_data = combined_df['x_converted'].values
-            y_data = combined_df['y_converted'].values
+            # Get coordinates for heatmap
+            x_data = combined_df[x_feature].values
+            y_data = combined_df[y_feature].values
 
             # Create the grid for the heatmap
             x_min, x_max = np.min(x_data) - 0.05 * (
@@ -685,8 +671,8 @@ def update_scatter_graph15(
 
                         fig.add_trace(
                             go.Scatter(
-                                x=df_subset['x_converted'],
-                                y=df_subset['y_converted'],
+                                x=df_subset[x_feature],
+                                y=df_subset[y_feature],
                                 mode="markers",
                                 marker=dict(
                                     size=4,  # Smaller points
@@ -709,8 +695,8 @@ def update_scatter_graph15(
 
                         fig.add_trace(
                             go.Scatter(
-                                x=cluster_points['x_converted'],
-                                y=cluster_points['y_converted'],
+                                x=cluster_points[x_feature],
+                                y=cluster_points[y_feature],
                                 mode="markers",
                                 marker=dict(
                                     size=marker_size,
@@ -731,8 +717,8 @@ def update_scatter_graph15(
 
                     fig.add_trace(
                         go.Scatter(
-                            x=df_subset['x_converted'],
-                            y=df_subset['y_converted'],
+                            x=df_subset[x_feature],
+                            y=df_subset[y_feature],
                             mode="markers",
                             marker=dict(
                                 size=8,
@@ -758,8 +744,8 @@ def update_scatter_graph15(
 
                     fig.add_trace(
                         go.Scatter(
-                            x=cluster_points['x_converted'],
-                            y=cluster_points['y_converted'],
+                            x=cluster_points[x_feature],
+                            y=cluster_points[y_feature],
                             mode="markers",
                             marker=dict(
                                 size=marker_size,
@@ -808,19 +794,19 @@ def update_scatter_graph15(
         elif len(fig.data) > 6:
             figure_height = 650
 
-        # Apply the layout settings with converted units
+        # Apply the layout settings
         if visualization_type == "heatmap":
-            title = f"Custom Feature Heatmap: {format_axis_title(x_feature, x_unit)} vs {format_axis_title(y_feature, y_unit)}{title_suffix}"
+            title = f"Custom Feature Heatmap: {x_feature} vs {y_feature}{title_suffix}"
         else:
             title = (
-                f"Custom Feature Scatter Plot: {format_axis_title(x_feature, x_unit)} vs {format_axis_title(y_feature, y_unit)}{title_suffix}"
+                f"Custom Feature Scatter Plot: {x_feature} vs {y_feature}{title_suffix}"
             )
 
         fig.update_layout(
             height=figure_height,
             title=title,
-            xaxis_title=format_axis_title(x_feature, x_unit),
-            yaxis_title=format_axis_title(y_feature, y_unit),
+            xaxis_title=x_feature,
+            yaxis_title=y_feature,
             legend_title=f"{'Clusters' if color_mode == 'cluster' else 'Data File'}",
             dragmode="lasso",  # Explicitly set lasso as default selection mode
             legend=legend_config,
@@ -990,12 +976,6 @@ def update_graph25(
                 "Features not found.",
             )
 
-        # Apply unit conversions to the data
-        x_converted, x_unit = convert_feature_for_display(combined_df[x_feature], x_feature)
-        y_converted, y_unit = convert_feature_for_display(combined_df[y_feature], y_feature)
-        combined_df['x_converted'] = x_converted
-        combined_df['y_converted'] = y_converted
-
         # Extract selected points
         selected_indices = []
 
@@ -1008,12 +988,11 @@ def update_graph25(
                 f"Box selection: x=[{x_range[0]:.2f}, {x_range[1]:.2f}], y=[{y_range[0]:.2f}, {y_range[1]:.2f}]"
             )
 
-            # Use converted values for selection
             selected_mask = (
-                (combined_df['x_converted'] >= x_range[0])
-                & (combined_df['x_converted'] <= x_range[1])
-                & (combined_df['y_converted'] >= y_range[0])
-                & (combined_df['y_converted'] <= y_range[1])
+                (combined_df[x_feature] >= x_range[0])
+                & (combined_df[x_feature] <= x_range[1])
+                & (combined_df[y_feature] >= y_range[0])
+                & (combined_df[y_feature] <= y_range[1])
             )
             selected_indices = np.where(selected_mask)[0].tolist()
             debug_text.append(f"Found {len(selected_indices)} points in box selection")
@@ -1031,9 +1010,9 @@ def update_graph25(
             # Create a Path object from the lasso points
             lasso_path = Path(np.column_stack([lasso_x, lasso_y]))
 
-            # Check which points are within the lasso path (use converted values)
+            # Check which points are within the lasso path
             points_array = np.column_stack(
-                [combined_df['x_converted'].values, combined_df['y_converted'].values]
+                [combined_df[x_feature].values, combined_df[y_feature].values]
             )
             inside_lasso = lasso_path.contains_points(points_array)
 
@@ -1054,9 +1033,9 @@ def update_graph25(
                 y_val = point.get("y")
 
                 if x_val is not None and y_val is not None:
-                    # Find the closest point in the dataset (use converted values)
-                    distances = (combined_df['x_converted'] - x_val) ** 2 + (
-                        combined_df['y_converted'] - y_val
+                    # Find the closest point in the dataset
+                    distances = (combined_df[x_feature] - x_val) ** 2 + (
+                        combined_df[y_feature] - y_val
                     ) ** 2
                     closest_idx = distances.idxmin()
                     selected_indices.append(closest_idx)
@@ -1084,7 +1063,7 @@ def update_graph25(
                         clean_name = clean_name.split(" (")[0]
                     color_map[clean_name] = trace["marker"]["color"]
 
-        # Add traces for each file label (using converted data)
+        # Add traces for each file label
         for label in selected_df["file_label"].unique():
             mask = selected_df["file_label"] == label
             df_subset = selected_df[mask]
@@ -1094,20 +1073,20 @@ def update_graph25(
 
             fig.add_trace(
                 go.Scatter(
-                    x=df_subset['x_converted'],
-                    y=df_subset['y_converted'],
+                    x=df_subset[x_feature],
+                    y=df_subset[y_feature],
                     mode="markers",
                     marker=dict(size=8, color=color, opacity=0.7),
                     name=f"{label} ({len(df_subset)} pts)",
                 )
             )
 
-        # Update figure layout with converted units
+        # Update figure layout
         fig.update_layout(
             height=600,
-            title=f"Selected Points from Graph 1.5: {format_axis_title(x_feature, x_unit)} vs {format_axis_title(y_feature, y_unit)}",
-            xaxis_title=format_axis_title(x_feature, x_unit),
-            yaxis_title=format_axis_title(y_feature, y_unit),
+            title=f"Selected Points from Graph 1.5: {x_feature} vs {y_feature}",
+            xaxis_title=x_feature,
+            yaxis_title=y_feature,
             legend_title="Data File",
         )
 

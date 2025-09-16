@@ -192,3 +192,6 @@ BACKUP_*/
 *.backup
 src/BACKUP_*/
 BACKUP_*/
+src/BACKUP_*/
+BACKUP_*/
+*.backup

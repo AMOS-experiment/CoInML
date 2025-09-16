@@ -190,3 +190,5 @@ src/sculpt-backup-*/
 src/sculpt copy/
 BACKUP_*/
 *.backup
+src/BACKUP_*/
+BACKUP_*/

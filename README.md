@@ -1,58 +1,85 @@
-# Correlation in Coincidence Data with Machine Learning
+# SCULPT - Supervised Clustering and Uncovering Latent Patterns with Training
 
-This repository provides Machine Learning (ML) methods to detect rare events showing particle entanglement, utilizing high repetition-rate light source technology and REaction MIcroscopy (REMI)
+SCULPT is a comprehensive machine learning framework for analyzing high-dimensional coincidence spectroscopy data, particularly from COLTRIMS experiments.
 
-## Getting Started
+## Features
 
-To install this source code follow the next steps:
-1. Clone this repository
-2. In command line, go to the source code:
-    ```sh
-    cd CoInML
-    ```
-3. Create and activate a new conda environment:
-    ```sh
-    conda create --name my_env python=3.11 -y
-    conda activate my_env
-    ```
-4. Install source code:
-    ```sh
-    pip install .
-    ```
+- **Interactive UMAP visualization** for high-dimensional momentum data
+- **Adaptive confidence scoring** for clustering validation
+- **Genetic programming** for automated feature discovery
+- **Deep autoencoders** for non-linear feature extraction
+- **Flexible molecular configuration** system
+- **Real-time filtering** and selection tools
+
+## Requirements
+
+- Python 3.8 or higher (3.11 recommended)
+- 8GB RAM minimum (16GB recommended)
+- Modern web browser
+
+## Installation
+
+### Quick Start
+
+1. Clone this repository:
+   ```bash
+   git clone <repository-url>
+   cd sculpt
+   ```
+
+2. Create and activate a new conda environment:
+   ```bash
+   conda create --name sculpt_env python=3.11 -y
+   conda activate sculpt_env
+   ```
+
+3. Install the package:
+   ```bash
+   pip install .
+   ```
+
+4. Run the application:
+   ```bash
+   python src/sculpt/app.py
+   ```
+
+5. Open your browser to:
+   [http://localhost:9000](http://localhost:9000)
 
 ## Developer Setup
 
 ### Prerequisites
-In addition to the steps listed above, please make sure to execute the following:
+In addition to the basic installation steps above, developers should execute the following:
 
 1. Install development dependencies:
-   ```sh
+   ```bash
    pip install ".[dev]"
    ```
-3. Set up `pre-commit` in the repository:
-   ```sh
+
+2. Set up `pre-commit` in the repository:
+   ```bash
    pre-commit install
    ```
    This ensures hooks run automatically before each commit.
 
 ### Running Pre-commit Hooks
 - Run all hooks on all files:
-  ```sh
+  ```bash
   pre-commit run --all-files
   ```
 - Run hooks only on changed files:
-  ```sh
+  ```bash
   pre-commit run
   ```
 
 ### Setting Up GGShield
 GGShield is a tool for detecting secrets in your code before they get committed. To install and configure it:
 1. Install GGShield:
-   ```sh
+   ```bash
    pip install ggshield
    ```
 2. Authenticate with GitGuardian:
-   ```sh
+   ```bash
    ggshield auth login
    ```
 
@@ -60,7 +87,7 @@ GGShield is a tool for detecting secrets in your code before they get committed.
 - **Hooks failing during commit**: Fix reported issues and re-stage files before committing.
 - **Pre-commit not installed**: Run `pre-commit install`.
 - **Skipping pre-commit checks** (use only if necessary):
-  ```sh
+  ```bash
   git commit --no-verify
   ```
 
@@ -81,7 +108,44 @@ repos:
 ```
 Modify this file to add or remove hooks as needed.
 
-### Copyright Notice
+## Usage
+
+### 1. Data Upload
+
+- Drag and drop CSV files containing momentum data
+- Expected format: `Px, Py, Pz` for each particle
+
+### 2. Configure Molecular System
+
+- Select or create a molecular profile (e.g., D₂O, HDO)
+- Assign profiles to uploaded files
+
+### 3. Run Analysis
+
+- Choose features for UMAP embedding
+- Adjust parameters (`n_neighbors`, `min_dist`)
+- Click **"Run UMAP"**
+
+### 4. Explore Results
+
+- Use lasso/box selection tools
+- Apply filters (density, physics parameters)
+- Export selected data
+
+## Example Data
+
+Example COLTRIMS datasets are provided in:
+`data/examples/`
+
+## Documentation
+
+See the `docs/` directory for detailed documentation.
+
+## Additional Resources
+- [Pre-commit Documentation](https://pre-commit.com/)
+- [Git Hooks Documentation](https://git-scm.com/book/en/v2/Customizing-Git-Git-Hooks)
+
+## Copyright Notice
 
 SCULPT (Supervised Clustering and Uncovering Latent Patterns with Training) Copyright (c) 2025,
 The Regents of the University of California, through Lawrence Berkeley National Laboratory
@@ -104,7 +168,3 @@ WARRANTY, EXPRESS OR IMPLIED, OR ASSUMES ANY LEGAL LIABILITY OR RESPONSIBILITY F
 THE ACCURACY, COMPLETENESS, OR USEFULNESS OF ANY DATA, APPARATUS, PRODUCT, OR
 PROCESS DISCLOSED, OR REPRESENTS THAT ITS USE WOULD NOT INFRINGE PRIVATELY OWNED
 RIGHTS.
-
-### Additional Resources
-- [Pre-commit Documentation](https://pre-commit.com/)
-- [Git Hooks Documentation](https://git-scm.com/book/en/v2/Customizing-Git-Git-Hooks)

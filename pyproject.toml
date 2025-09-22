@@ -3,20 +3,32 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-    packages = ["src/**/*"]
+packages = ["src/sculpt"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [project]
-name = "CoInML"
+name = "sculpt"
 version = "0.1.0"
 description = "Correlation in Coincidence Data with Machine Learning"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 
 dependencies = [
-    "umap-learn"
+    "umap-learn",
+    "dash[diskcache]==2.14.0",
+    "plotly==5.18.0",
+    "pandas==2.0.3",
+    "numpy==1.24.3",
+    "scipy==1.11.1",
+    "scikit-learn==1.3.0",
+    "umap-learn==0.5.4",
+    "torch==2.0.1",
+    "gplearn==0.4.2",
+    "dash-bootstrap-components==1.5.0",
+    "openpyxl==3.1.2",
+    "matplotlib==3.7.2",
 ]
 
 [project.optional-dependencies]
@@ -27,3 +39,6 @@ dev = [
     "pre-commit==3.6.2",
     "pytest==8.1.1",
 ]
+
+[tool.isort]
+profile = "black"

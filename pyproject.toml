@@ -17,7 +17,7 @@ requires-python = ">=3.11"
 
 dependencies = [
     "umap-learn",
-    "dash==2.14.0",
+    "dash[diskcache]==2.14.0",
     "plotly==5.18.0",
     "pandas==2.0.3",
     "numpy==1.24.3",

@@ -151,8 +151,10 @@ SCULPT (Supervised Clustering and Uncovering Latent Patterns with Training) Copy
 The Regents of the University of California, through Lawrence Berkeley National Laboratory
 (“Berkeley Lab”) subject to receipt of any required approvals from the U.S. Dept. of Energy. All
 rights reserved.
+
 If you have questions about your rights to use, distribute this software, or use for commercial
 purposes, please contact Berkeley Lab's Intellectual Property Office at IPO@lbl.gov.
+
 NOTICE: This Software was developed under Contract No. DE-AC02-05CH11231 with the
 Department of Energy (“DOE”). During the period of commercialization or such other time period
 specified by DOE, the U.S. Government is granted for itself and others acting on its behalf a

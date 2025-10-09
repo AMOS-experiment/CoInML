@@ -454,6 +454,7 @@ def train_autoencoder_and_run_umap(
                     mode="markers",
                     marker=dict(size=8, color=color, opacity=0.7),
                     name=f"{label} ({len(df_subset)} pts)",
+                    showlegend=True,
                 )
             )
 
@@ -1658,6 +1659,7 @@ def run_umap_on_mi_features(
                     mode="markers",
                     marker=dict(size=8, opacity=0.7),
                     name=f"{label} ({len(df_subset)} pts)",
+                    showlegend=True,
                 )
             )
 
@@ -1666,6 +1668,7 @@ def run_umap_on_mi_features(
             xaxis_title="UMAP1",
             yaxis_title="UMAP2",
             height=550,
+            showlegend=True,
         )
 
         # Calculate metrics including MI analysis
@@ -2135,6 +2138,7 @@ def update_mi_scatter_plot(n_clicks, x_feature, y_feature, mi_store):
                     mode="markers",
                     marker=dict(size=6, opacity=0.7),
                     name=f"{label}",
+                    showlegend=True,
                 )
             )
 
@@ -2143,6 +2147,7 @@ def update_mi_scatter_plot(n_clicks, x_feature, y_feature, mi_store):
             xaxis_title=x_feature,
             yaxis_title=y_feature,
             height=400,
+            showlegend=True,
         )
 
         return fig

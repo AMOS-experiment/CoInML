@@ -371,6 +371,7 @@ def update_custom_feature_plot(
                                 opacity=0.7,
                             ),
                             name=f"{label} ({source}, {len(points)} pts)",
+                            showlegend=True,
                         )
                     )
         else:
@@ -385,6 +386,7 @@ def update_custom_feature_plot(
                         mode="markers",
                         marker=dict(size=8, color=color_map.get(label), opacity=0.7),
                         name=f"{label} ({len(points)} pts)",
+                        showlegend=True,
                     )
                 )
 
@@ -395,6 +397,7 @@ def update_custom_feature_plot(
             xaxis_title=format_axis_title(x_feature, x_unit),
             yaxis_title=format_axis_title(y_feature, y_unit),
             legend_title="Data Source",
+            showlegend=True,
         )
 
         return fig, "<br>".join(debug_text)
@@ -699,6 +702,7 @@ def update_scatter_graph15(
                                     line=dict(width=0),
                                 ),
                                 name=f"{label} ({len(df_subset)} pts)",
+                                showlegend=True,
                             )
                         )
                 elif color_mode == "cluster" and cluster_labels is not None:
@@ -723,6 +727,7 @@ def update_scatter_graph15(
                                     line=dict(width=0),
                                 ),
                                 name=f"Cluster {cluster if cluster != -1 else 'Noise'} ({len(cluster_points)} pts)",
+                                showlegend=True,
                             )
                         )
         else:
@@ -745,6 +750,7 @@ def update_scatter_graph15(
                                 line=dict(width=0),
                             ),
                             name=f"{label} ({len(df_subset)} pts)",
+                            showlegend=True,
                         )
                     )
 
@@ -772,6 +778,7 @@ def update_scatter_graph15(
                                 line=dict(width=0),
                             ),
                             name=f"Cluster {cluster if cluster != -1 else 'Noise'} ({len(cluster_points)} pts)",
+                            showlegend=True,
                         )
                     )
 
@@ -835,6 +842,7 @@ def update_scatter_graph15(
                 activecolor="rgba(254,95,85,1)",
             ),  # Add these tools to the modebar
             margin=dict(l=50, r=50, t=50, b=100),  # Increased bottom margin for legend
+            showlegend=True,
         )
 
         # Simplified cluster information (no complex metrics)
@@ -1105,6 +1113,7 @@ def update_graph25(
                     mode="markers",
                     marker=dict(size=8, color=color, opacity=0.7),
                     name=f"{label} ({len(df_subset)} pts)",
+                    showlegend=True,
                 )
             )
 
@@ -1115,6 +1124,7 @@ def update_graph25(
             xaxis_title=format_axis_title(x_feature, x_unit),
             yaxis_title=format_axis_title(y_feature, y_unit),
             legend_title="Data File",
+            showlegend=True,
         )
 
         # Count points by file for information panel

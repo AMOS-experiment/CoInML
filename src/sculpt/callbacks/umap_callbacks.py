@@ -366,6 +366,7 @@ def update_umap(
                                     line=dict(width=0),
                                 ),
                                 name=f"{label} ({len(df_subset)} pts)",
+                                showlegend=True,
                             )
                         )
                 elif color_mode == "cluster":
@@ -390,6 +391,7 @@ def update_umap(
                                     line=dict(width=0),
                                 ),
                                 name=f"Cluster {cluster if cluster != -1 else 'Noise'} ({len(cluster_points)} pts)",
+                                showlegend=True,
                             )
                         )
         else:
@@ -416,6 +418,7 @@ def update_umap(
                                 line=dict(width=0),
                             ),
                             name=f"{label} ({len(df_subset)} pts)",
+                            showlegend=True,
                         )
                     )
 
@@ -447,6 +450,7 @@ def update_umap(
                                 line=dict(width=0),
                             ),
                             name=f"Cluster {cluster if cluster != -1 else 'Noise'} ({len(cluster_points)} pts)",
+                            showlegend=True,
                         )
                     )
 
@@ -510,6 +514,7 @@ def update_umap(
                 activecolor="rgba(254,95,85,1)",
             ),
             margin=dict(l=50, r=50, t=50, b=100),  # Increased bottom margin for legend
+            showlegend=True,
         )
 
         # Store data for other callbacks
@@ -769,6 +774,7 @@ def update_umap_selected_only(
                         mode="markers",
                         marker=dict(size=8, color=marker_color, opacity=0.7),
                         name=f"{label} ({len(df_subset)} pts)",
+                        showlegend=True,
                     )
                 )
             else:
@@ -780,6 +786,7 @@ def update_umap_selected_only(
                         mode="markers",
                         marker=dict(size=8, opacity=0.7),
                         name=f"{label} ({len(df_subset)} pts)",
+                        showlegend=True,
                     )
                 )
 
@@ -1036,6 +1043,7 @@ def update_umap_selected_run(
                         mode="markers",
                         marker=dict(size=8, color=marker_color, opacity=0.7),
                         name=f"{label} ({len(df_subset)} pts)",
+                        showlegend=True,
                     )
                 )
             else:
@@ -1047,6 +1055,7 @@ def update_umap_selected_run(
                         mode="markers",
                         marker=dict(size=8, opacity=0.7),
                         name=f"{label} ({len(df_subset)} pts)",
+                        showlegend=True,
                     )
                 )
 
@@ -1478,6 +1487,7 @@ def update_umap_graph3_selection(
                     mode="markers",
                     marker=dict(size=8, color=color, opacity=0.7),
                     name=f"{label} ({len(df_subset)} pts)",
+                    showlegend=True,
                 )
             )
 
@@ -1488,6 +1498,7 @@ def update_umap_graph3_selection(
             xaxis_title="UMAP1",
             yaxis_title="UMAP2",
             legend_title="Data File",
+            showlegend=True,
         )
 
         # Store the result for potential future use

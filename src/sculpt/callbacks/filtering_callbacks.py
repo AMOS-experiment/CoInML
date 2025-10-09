@@ -280,6 +280,7 @@ def apply_density_filter(
                     mode="markers",
                     marker=dict(size=7, color=color, opacity=0.7),
                     name=display_name,
+                    showlegend=True,
                 )
             )
 
@@ -290,6 +291,7 @@ def apply_density_filter(
             xaxis_title=x_feature,
             yaxis_title=y_feature,
             legend_title="Data Source",
+            showlegend=True,
         )
 
         # Store filtered data
@@ -479,6 +481,7 @@ def apply_parameter_filter(
                     mode="markers",
                     marker=dict(size=8, color=color, opacity=0.7),
                     name=f"{label} ({len(df_subset)} pts)",
+                    showlegend=True,
                 )
             )
 
@@ -510,6 +513,7 @@ def apply_parameter_filter(
             xaxis_title=x_feature,
             yaxis_title=y_feature,
             legend_title="Data Source",
+            showlegend=True,
         )
 
         # Store filtered data
@@ -732,6 +736,7 @@ def apply_umap_density_filter(
                     mode="markers",
                     marker=dict(size=8, color=color, opacity=0.7),
                     name=f"{label} ({len(df_subset)} pts)",
+                    showlegend=True,
                 )
             )
 
@@ -743,6 +748,7 @@ def apply_umap_density_filter(
             xaxis_title="UMAP1",
             yaxis_title="UMAP2",
             legend_title="Data Source",
+            showlegend=True,
         )
 
         # Store filtered data
@@ -947,6 +953,7 @@ def apply_umap_parameter_filter(
                     mode="markers",
                     marker=dict(size=8, color=color, opacity=0.7),
                     name=f"{label} ({len(df_subset)} pts)",
+                    showlegend=True,
                 )
             )
 
@@ -957,6 +964,7 @@ def apply_umap_parameter_filter(
             xaxis_title="UMAP1",
             yaxis_title="UMAP2",
             legend_title="Data Source",
+            showlegend=True,
         )
 
         # Store filtered data

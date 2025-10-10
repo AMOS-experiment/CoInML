@@ -212,6 +212,7 @@ def run_genetic_feature_discovery_and_umap(
                             hovertemplate="UMAP1: %{x:.3f}<br>UMAP2: %{y:.3f}<br>Cluster: %{text}<br>File: "
                             + file_label
                             + "<extra></extra>",
+                            showlegend=True,
                         )
                     )
 

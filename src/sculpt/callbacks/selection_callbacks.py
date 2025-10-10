@@ -323,6 +323,7 @@ def update_umap_selected_run_only(
                     mode="markers",
                     marker=dict(size=8, color=color, opacity=0.7),
                     name=f"{label} ({len(df_subset)} pts)",
+                    showlegend=True,
                 )
             )
 
@@ -333,6 +334,7 @@ def update_umap_selected_run_only(
             xaxis_title="UMAP1",
             yaxis_title="UMAP2",
             legend_title="Data File",
+            showlegend=True,
         )
 
         # Count points by file for information panel

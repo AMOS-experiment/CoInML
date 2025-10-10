@@ -355,9 +355,12 @@ def create_selection_tab():
                                                                                     "value": "KER",
                                                                                 },
                                                                                 {
-                                                                                    "label": "EESum (Sum of Electron"
-                                                                                    " Energies)",
+                                                                                    "label": "EESum (Electron Energy Sum)",
                                                                                     "value": "EESum",
+                                                                                },
+                                                                                {
+                                                                                    "label": "EESharing (Electron Energy Sharing)",
+                                                                                    "value": "EESharing",
                                                                                 },
                                                                                 {
                                                                                     "label": "Total Energy",
@@ -382,6 +385,30 @@ def create_selection_tab():
                                                                                 {
                                                                                     "label": "Ion-Ion Angle",
                                                                                     "value": "angle_ion1_ion2",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Electron-Electron Angle",
+                                                                                    "value": "angle_electron1_electron2",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Ion 1 Theta (θ) Angle",
+                                                                                    "value": "theta_ion1",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Ion 2 Theta (θ) Angle",
+                                                                                    "value": "theta_ion2",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Electron 1 Theta (θ) Angle",
+                                                                                    "value": "theta_electron1",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Electron 2 Theta (θ) Angle",
+                                                                                    "value": "theta_electron2",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Momentum Difference (Ion 1-2)",
+                                                                                    "value": "momentum_diff_12",
                                                                                 },
                                                                             ],
                                                                             value=None,
@@ -645,9 +672,12 @@ def create_selection_tab():
                                                                                     "value": "KER",
                                                                                 },
                                                                                 {
-                                                                                    "label": "EESum (Sum of Electron"
-                                                                                    " Energies)",
+                                                                                    "label": "EESum (Electron Energy Sum)",
                                                                                     "value": "EESum",
+                                                                                },
+                                                                                {
+                                                                                    "label": "EESharing (Electron Energy Sharing)",
+                                                                                    "value": "EESharing",
                                                                                 },
                                                                                 {
                                                                                     "label": "Total Energy",
@@ -672,6 +702,30 @@ def create_selection_tab():
                                                                                 {
                                                                                     "label": "Ion-Ion Angle",
                                                                                     "value": "angle_ion1_ion2",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Electron-Electron Angle",
+                                                                                    "value": "angle_electron1_electron2",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Ion 1 Theta (θ) Angle",
+                                                                                    "value": "theta_ion1",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Ion 2 Theta (θ) Angle",
+                                                                                    "value": "theta_ion2",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Electron 1 Theta (θ) Angle",
+                                                                                    "value": "theta_electron1",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Electron 2 Theta (θ) Angle",
+                                                                                    "value": "theta_electron2",
+                                                                                },
+                                                                                {
+                                                                                    "label": "Momentum Difference (Ion 1-2)",
+                                                                                    "value": "momentum_diff_12",
                                                                                 },
                                                                             ],
                                                                             value=None,

@@ -23,7 +23,7 @@ SCULPT is a comprehensive machine learning framework for analyzing high-dimensio
 
 1. Clone this repository:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/AMOS-experiment/CoInML
    cd sculpt
    ```
 

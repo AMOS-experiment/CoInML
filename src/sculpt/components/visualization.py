@@ -268,7 +268,44 @@ def create_basic_viz_tab():
                                                     "Run UMAP",
                                                     id="run-umap",
                                                     n_clicks=0,
+                                                    className="btn-primary",
                                                 ),
+                                                html.Br(),
+                                                # Progress tracking section (for Prefect) - NO DBC!
+                                                html.Div([
+                                                    html.Div([
+                                                        html.H6("UMAP Analysis Progress", style={"marginBottom": "10px"}),
+                                                        html.Div(id="umap-status-message", style={"marginBottom": "10px"}),
+                                                        # Custom progress bar using standard HTML
+                                                        html.Div([
+                                                            html.Div(
+                                                                id="umap-progress-bar",
+                                                                style={
+                                                                    "width": "0%",
+                                                                    "height": "20px",
+                                                                    "backgroundColor": "#007bff",
+                                                                    "borderRadius": "4px",
+                                                                    "transition": "width 0.3s ease",
+                                                                    "textAlign": "center",
+                                                                    "color": "white",
+                                                                    "lineHeight": "20px",
+                                                                },
+                                                                children="0%"
+                                                            )
+                                                        ], style={
+                                                            "width": "100%",
+                                                            "backgroundColor": "#e9ecef",
+                                                            "borderRadius": "4px",
+                                                            "marginBottom": "10px"
+                                                        }),
+                                                        html.Div(id="umap-status-details", style={"fontSize": "12px", "color": "gray"}),
+                                                    ], style={
+                                                        "padding": "15px",
+                                                        "border": "1px solid #ddd",
+                                                        "borderRadius": "5px",
+                                                        "backgroundColor": "#f9f9f9",
+                                                    })
+                                                ], id="umap-progress-card", style={"display": "none", "marginBottom": "15px"}),
                                                 html.Div(
                                                     id="run-umap-status",
                                                     style={
@@ -374,6 +411,14 @@ def create_basic_viz_tab():
                                     ],
                                     style={"display": "flex"},
                                 ),
+                                # Hidden components for Prefect monitoring
+                                dcc.Interval(
+                                    id="umap-progress-interval", 
+                                    interval=2000,  # Update every 2 seconds
+                                    n_intervals=0,
+                                    disabled=True  # Start disabled
+                                ),
+                                dcc.Store(id="umap-flow-run-store"),
                             ],
                             className="container",
                         )

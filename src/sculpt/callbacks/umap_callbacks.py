@@ -33,7 +33,7 @@ from sculpt.utils.metrics.physics_features import (
 from sculpt.utils.ui import create_smart_confidence_ui
 
 
-# Callback for Graph 1: Original UMAP Embedding with selected features
+#Callback for Graph 1: Original UMAP Embedding with selected features
 @callback(
     Output("umap-graph", "figure"),
     Output("debug-output", "children"),

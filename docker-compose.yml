@@ -54,6 +54,7 @@ services:
         condition: service_healthy
     volumes:
       - ./data:/app/data
+      - ./data/prefect-storage:/root/.prefect/storage:rw
     networks:
       - prefect-network
 
@@ -62,7 +63,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.app
-    command: sleep 3600
     restart: unless-stopped
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
@@ -73,6 +73,7 @@ services:
     volumes:
       - ./sculpt:/app/sculpt
       - ./data:/app/data
+      - ./data/prefect-storage:/root/.prefect/storage:rw
     depends_on:
       prefect-server:
         condition: service_healthy

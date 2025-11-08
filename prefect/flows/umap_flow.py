@@ -29,9 +29,9 @@ from tasks.umap_tasks import (
     name="SCULPT UMAP Analysis",
     description="Complete UMAP embedding and clustering workflow",
     retries=1,
-    log_prints=True,  # ADD THIS - ensures logs go to cloud
-    persist_result=True,  # ADD THIS - ensures results are stored
-    timeout_seconds=600,  # ADD THIS - 10 minute timeout
+    log_prints=True,
+    persist_result=True,
+    timeout_seconds=600,
 )
 def umap_analysis_flow(
     stored_files: List[Dict],  # Changed from Dict to List[Dict]

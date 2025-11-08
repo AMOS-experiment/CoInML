@@ -51,18 +51,20 @@ def run_flow_async(flow_id, **kwargs):
         flow_ended = False
         while not flow_ended:
             state = get_flow_run_state(flow_run_id)
-            if state in ["COMPLETED", "FAILED", "CANCELLED"]:
+            if state.name in ["COMPLETED", "FAILED", "CANCELLED", "CRASHED"]:
                 flow_ended = True
-            print(f"⏳ Flow {flow_id} is still running...")
+            print(f"⏳ Flow {flow_run_id} is still running with {state}...")
             time.sleep(1)
 
-        if state == "COMPLETED":
+        if state.name == "COMPLETED":
             result = get_flow_run_result(flow_run_id)
             print(f"✅ Flow completed with result: {result}")
-        elif state == "FAILED":
+        elif state.name == "FAILED":
             print("❌ Flow failed")
-        elif state == "CANCELLED":
+        elif state.name == "CANCELLED":
             print("🚫 Flow was cancelled")
+        elif state.name == "CRASHED":
+            print("💥 Flow crashed unexpectedly")
         # Run the flow - this will now show in Prefect UI
         # result = tracked_umap_flow(**kwargs)
 

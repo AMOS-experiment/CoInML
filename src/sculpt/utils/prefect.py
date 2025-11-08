@@ -56,7 +56,6 @@ async def get_flow_run_result_async(flow_run_id: str):
         flow_run = await client.read_flow_run(flow_run_id)
 
         if flow_run.state.is_completed():
-            # TODO: Change this to read the dataframe that the job generates
             return await flow_run.state.result()
         elif flow_run.state.is_failed():
             raise Exception(f"Flow run failed: {flow_run.state.message}")

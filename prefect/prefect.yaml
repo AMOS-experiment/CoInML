@@ -1,0 +1,24 @@
+name: sculpt_worker
+prefect-version: 3.0.0
+
+build:
+
+push:
+
+pull:
+- prefect.deployments.steps.set_working_directory:
+    directory: '{{ $PREFECT_WORK_DIR }}'
+
+deployments:
+- name: umap_analysis_flow
+  version: 0.1.0
+  tags: []
+  description: Complete UMAP embedding and clustering workflow
+  entrypoint: flows/umap_flow.py:umap_analysis_flow
+  parameters: {}
+  work_pool:
+    name: sculpt-pool
+    work_queue_name: default-queue
+    job_variables: {}
+  schedule:
+  is_schedule_active: true

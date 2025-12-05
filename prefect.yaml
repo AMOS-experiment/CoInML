@@ -14,7 +14,7 @@ deployments:
   version: 0.1.0
   tags: []
   description: Complete UMAP embedding and clustering workflow
-  entrypoint: flows/umap_flow.py:umap_analysis_flow
+  entrypoint: prefect1/flows/umap_flow.py:umap_analysis_flow
   parameters: {}
   work_pool:
     name: sculpt-pool

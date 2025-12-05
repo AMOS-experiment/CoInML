@@ -41,22 +41,22 @@ services:
       - prefect-network
 
   # Prefect Worker for running flows
-  prefect-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    environment:
-      PREFECT_API_URL: http://prefect-server:4200/api
-      PREFECT_WORK_POOL_CONCURRENCY: ${PREFECT_WORKER_CONCURRENCY:-1}
-      PREFECT_WORKER_LIMIT: ${PREFECT_WORKER_LIMIT:-1}
-    depends_on:
-      prefect-server:
-        condition: service_healthy
-    volumes:
-      - ./data:/app/data
-      - ./data/prefect-storage:/root/.prefect/storage:rw
-    networks:
-      - prefect-network
+  # prefect-worker:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.worker
+  #   environment:
+  #     PREFECT_API_URL: http://prefect-server:4200/api
+  #     PREFECT_WORK_POOL_CONCURRENCY: ${PREFECT_WORKER_CONCURRENCY:-1}
+  #     PREFECT_WORKER_LIMIT: ${PREFECT_WORKER_LIMIT:-1}
+  #   depends_on:
+  #     prefect-server:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./data:/app/data
+  #     - ./data/prefect-storage:/root/.prefect/storage:rw
+  #   networks:
+  #     - prefect-network
 
   # SCULPT Dash Application
   sculpt-app:

@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   prefect-server:
-    image: prefecthq/prefect:3-python3.9
+    image: prefecthq/prefect:3.4.2-python3.11
     command: prefect server start
     environment:
       - PREFECT_SERVER_API_HOST=0.0.0.0
@@ -25,6 +25,7 @@ services:
   prefect-db:
     image: postgres:14.5-alpine
     container_name: prefect-db
+    shm_size: '1gb'
     environment:
       - POSTGRES_USER=${PREFECT_DB_USER}
       - POSTGRES_PASSWORD=${PREFECT_DB_PW}
@@ -40,24 +41,6 @@ services:
     networks:
       - prefect-network
 
-  # Prefect Worker for running flows
-  # prefect-worker:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.worker
-  #   environment:
-  #     PREFECT_API_URL: http://prefect-server:4200/api
-  #     PREFECT_WORK_POOL_CONCURRENCY: ${PREFECT_WORKER_CONCURRENCY:-1}
-  #     PREFECT_WORKER_LIMIT: ${PREFECT_WORKER_LIMIT:-1}
-  #   depends_on:
-  #     prefect-server:
-  #       condition: service_healthy
-  #   volumes:
-  #     - ./data:/app/data
-  #     - ./data/prefect-storage:/root/.prefect/storage:rw
-  #   networks:
-  #     - prefect-network
-
   # SCULPT Dash Application
   sculpt-app:
     build:
@@ -68,39 +51,18 @@ services:
       PREFECT_API_URL: http://prefect-server:4200/api
       DOCKER_CONTAINER: 'true'
       PYTHONUNBUFFERED: 1
+      PREFECT_LOCAL_STORAGE_PATH: /opt/prefect/storage
     ports:
       - "127.0.0.1:9000:9000"
     volumes:
       - ./sculpt:/app/sculpt
       - ./data:/app/data
-      - ./data/prefect-storage:/root/.prefect/storage:rw
+      - ./data/prefect-storage:/opt/prefect/storage  # Local directory
     depends_on:
       prefect-server:
         condition: service_healthy
     networks:
       - prefect-network
-
-  # Optional: Jupyter for debugging
-  jupyter:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    ports:
-      - "127.0.0.1:8888:8888"
-    volumes:
-      - ./sculpt:/app/sculpt
-      - ./data:/app/data
-      - ./notebooks:/app/notebooks
-    environment:
-      PREFECT_API_URL: http://prefect-server:4200/api
-      DOCKER_CONTAINER: 'true'
-    networks:
-      - prefect-network
-    command: >
-      bash -c "
-      pip install prefect>=3.0.0 &&
-      jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root
-      "
 
 volumes:
   prefect_data:

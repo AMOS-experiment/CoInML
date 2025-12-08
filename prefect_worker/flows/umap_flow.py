@@ -17,7 +17,8 @@ if os.getenv("DOCKER_CONTAINER") == "true":
 from typing import Any, Dict, List
 
 import numpy as np
-from prefect1.tasks.umap_tasks import (
+
+from prefect_worker.tasks.umap_tasks import (
     compute_clustering,
     compute_umap_embedding,
     create_umap_dataframe,

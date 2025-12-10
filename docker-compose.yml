@@ -73,34 +73,15 @@ services:
     volumes:
       - ./sculpt:/app/sculpt
       - ./data:/app/data
-      - ./data/prefect-storage:/root/.prefect/storage:rw
+      #- ./data/prefect-storage:/root/.prefect/storage:rw
+      - /Users/hazem/.prefect/storage:/root/.prefect/storage:rw
     depends_on:
       prefect-server:
         condition: service_healthy
     networks:
       - prefect-network
 
-  # Optional: Jupyter for debugging
-  jupyter:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    ports:
-      - "127.0.0.1:8888:8888"
-    volumes:
-      - ./sculpt:/app/sculpt
-      - ./data:/app/data
-      - ./notebooks:/app/notebooks
-    environment:
-      PREFECT_API_URL: http://prefect-server:4200/api
-      DOCKER_CONTAINER: 'true'
-    networks:
-      - prefect-network
-    command: >
-      bash -c "
-      pip install prefect>=3.0.0 &&
-      jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root
-      "
+
 
 volumes:
   prefect_data:

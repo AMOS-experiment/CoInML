@@ -33,620 +33,626 @@ from sculpt.utils.metrics.physics_features import (
 from sculpt.utils.ui import create_smart_confidence_ui
 
 
+# =============================================================================
+# DISABLED: This callback conflicts with umap_prefect_callbacks.py
+# The Prefect version handles UMAP analysis with background task execution.
+# Keeping this commented out to prevent duplicate UMAP runs.
+# =============================================================================
+
 #Callback for Graph 1: Original UMAP Embedding with selected features
-@callback(
-    Output("umap-graph", "figure"),
-    Output("debug-output", "children"),
-    Output("combined-data-store", "data"),
-    Output("umap-quality-metrics", "children"),
-    Input("run-umap", "n_clicks"),
-    State("stored-files", "data"),
-    State("umap-file-selector", "value"),
-    State("num-neighbors", "value"),
-    State("min-dist", "value"),
-    State("sample-frac", "value"),
-    State({"type": "feature-selector-graph1", "category": ALL}, "value"),
-    State("metric-selector", "value"),
-    State("point-opacity", "value"),
-    State("color-mode", "value"),
-    State("visualization-type", "value"),
-    State("heatmap-bandwidth", "value"),
-    State("heatmap-colorscale", "value"),
-    State("show-points-overlay", "value"),
-    State("file-config-assignments-store", "data"),
-    State("configuration-profiles-store", "data"),
-    prevent_initial_call=True,
-)
-def update_umap(
-    n_clicks,
-    stored_files,
-    selected_ids,
-    num_neighbors,
-    min_dist,
-    sample_frac,
-    selected_features_list,
-    selected_metrics,
-    point_opacity,
-    color_mode,
-    visualization_type,
-    heatmap_bandwidth,
-    heatmap_colorscale,
-    show_points_overlay,
-    assignments_store,
-    profiles_store,
-):
-    """Compute UMAP embedding on selected files using selected features."""
-    if not stored_files:
-        return {}, "No files uploaded.", {}, [html.Div("No files uploaded.")]
-
-    if not selected_ids:
-        return {}, "No files selected for UMAP.", {}, [html.Div("No files selected.")]
-
-    try:
-        # Collect all selected features
-        all_selected_features = []
-        for features in selected_features_list:
-            if features:  # Only add non-empty lists
-                all_selected_features.extend(features)
-
-        sampled_dfs = []
-        debug_str = ""
-        selection_dfs = []  # Separate list for selection files to handle differently
-
-        # Process each selected file
-        for f in stored_files:
-            if f["id"] in selected_ids:
-                try:
-                    df = pd.read_json(f["data"], orient="split")
-                    is_selection = f.get("is_selection", False)
-
-                    if is_selection:
-                        # This is a saved selection file
-                        debug_str += f"{f['filename']}: Selection file with {len(df)} events.<br>"
-
-                        # Make sure it has required columns for visualization
-                        if (
-                            "UMAP1" in df.columns
-                            and "UMAP2" in df.columns
-                            and "file_label" in df.columns
-                        ):
-                            selection_dfs.append(df)
-                        else:
-                            debug_str += f"Warning: Selection file {f['filename']} is missing required columns.<br>"
-                    else:
-                        # Regular COLTRIMS file - apply configuration-aware physics features
-                        df["file_label"] = f["filename"]  # Add file name as a label
-
-                        # Check if physics features already exist, if not calculate them
-                        if not has_physics_features(df):
-                            # Get profile assignment for this file
-                            profile_name = (
-                                assignments_store.get(f["filename"])
-                                if assignments_store
-                                else None
-                            )
-
-                            if (
-                                profile_name
-                                and profile_name != "none"
-                                and profiles_store
-                                and profile_name in profiles_store
-                            ):
-                                # Calculate with assigned profile
-                                profile_config = profiles_store[profile_name]
-                                try:
-                                    df = calculate_physics_features_with_profile(
-                                        df, profile_config
-                                    )
-                                    debug_str += f"Applied profile '{profile_name}' to {f['filename']}<br>"
-                                except Exception as e:
-                                    debug_str += f"Error applying profile to {f['filename']}: {str(e)}<br>"
-                                    # Fallback to flexible calculation
-                                    df = calculate_physics_features_flexible(df, None)
-                            else:
-                                # No profile assigned, use flexible calculation
-                                df = calculate_physics_features_flexible(df, None)
-                                if assignments_store:
-                                    debug_str += f"No profile assigned for {f['filename']}, using default calculation<br>"
-
-                        # Sample the data
-                        sample_size = int(len(df) * sample_frac)
-                        if sample_size > 0 and sample_size < len(df):
-                            df = df.sample(n=sample_size, random_state=42).reset_index(
-                                drop=True
-                            )
-
-                        sampled_dfs.append(df)
-                        debug_str += (
-                            f"{f['filename']}: {len(df)} events after sampling.<br>"
-                        )
-                except Exception as e:
-                    debug_str += f"Error processing {f['filename']}: {str(e)}.<br>"
-
-        # Process regular COLTRIMS files (if any)
-        combined_df = None
-        umap_df = pd.DataFrame(columns=["UMAP1", "UMAP2", "file_label"])
-
-        if len(sampled_dfs) > 0:
-            # Combine all selected datasets
-            combined_df = pd.concat(sampled_dfs, ignore_index=True).reset_index(
-                drop=True
-            )
-            debug_str += f"Combined data shape: {combined_df.shape}.<br>"
-
-            # Use selected features for UMAP
-            if all_selected_features and len(all_selected_features) > 0:
-                feature_cols = [
-                    col for col in combined_df.columns if col in all_selected_features
-                ]
-                if feature_cols:
-                    debug_str += f"Using selected features for UMAP: {', '.join(feature_cols)}<br>"
-                    X = combined_df[feature_cols].to_numpy()
-                else:
-                    # Fallback to original momentum columns
-                    original_cols = [
-                        col
-                        for col in combined_df.columns
-                        if col.startswith("particle_")
-                    ]
-                    X = combined_df[original_cols].to_numpy()
-                    debug_str += "No valid features selected, using original momentum components.<br>"
-            else:
-                # Use original momentum columns
-                original_cols = [
-                    col for col in combined_df.columns if col.startswith("particle_")
-                ]
-                X = combined_df[original_cols].to_numpy()
-                debug_str += (
-                    "No features selected, using original momentum components.<br>"
-                )
-
-            # Run UMAP
-            reducer = umap.UMAP(
-                n_components=2,
-                n_neighbors=int(num_neighbors),
-                min_dist=float(min_dist),
-                metric="euclidean",
-                random_state=42,
-            )
-
-            # Handle NaN/inf values
-            X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
-
-            # Fit UMAP
-            umap_data = reducer.fit_transform(X)
-
-            # Create DataFrame for visualization
-            umap_df = pd.DataFrame(umap_data, columns=["UMAP1", "UMAP2"])
-            umap_df["file_label"] = combined_df["file_label"]
-        else:
-            combined_df = pd.DataFrame()
-
-        # Add any selection files directly to the visualization
-        for sel_df in selection_dfs:
-            # Add the selection data to the UMAP visualization data
-            # Use only the necessary columns for visualization
-            selection_viz_df = sel_df[["UMAP1", "UMAP2", "file_label"]].copy()
-
-            # Append to the UMAP dataframe
-            umap_df = pd.concat([umap_df, selection_viz_df], ignore_index=True)
-
-        # Calculate clustering for DBSCAN coloring (do this regardless of color mode)
-
-        # Get UMAP coordinates for clustering
-        X_umap = umap_df[["UMAP1", "UMAP2"]].to_numpy()
-
-        # Scale the data for better DBSCAN performance
-        scaler = StandardScaler()
-        X_umap_scaled = scaler.fit_transform(X_umap)
-
-        # Find a reasonable epsilon
-        eps_candidates = np.linspace(0.1, 1.0, 10)
-        best_eps = 0.5  # Default
-        max_clusters = 0
-
-        # Try different eps values and pick the one that gives a reasonable number of clusters
-        for eps in eps_candidates:
-            dbscan = DBSCAN(eps=eps, min_samples=5)
-            labels = dbscan.fit_predict(X_umap_scaled)
-            n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
-
-            # We want to maximize the number of clusters but avoid too many noise points
-            noise_count = np.sum(labels == -1)
-            noise_ratio = noise_count / len(labels) if len(labels) > 0 else 0
-
-            # Good balance: enough clusters but not too many noise points
-            if n_clusters >= 2 and noise_ratio < 0.5 and n_clusters > max_clusters:
-                max_clusters = n_clusters
-                best_eps = eps
-
-        # Run DBSCAN with the best eps
-        dbscan = DBSCAN(eps=best_eps, min_samples=5)
-        cluster_labels = dbscan.fit_predict(X_umap_scaled)
-
-        # Create color mappings for both file and cluster modes
-        # Color mapping for file labels
-        unique_labels = umap_df["file_label"].unique()
-        colorscale = px.colors.qualitative.Plotly  # Use Plotly's default colorscale
-        color_map = {
-            label: colorscale[i % len(colorscale)]
-            for i, label in enumerate(unique_labels)
-        }
-
-        # Color mapping for clusters
-        # Special handling for noise points (-1 label)
-        unique_clusters = sorted(set(cluster_labels))
-        if -1 in unique_clusters:
-            # Move noise to the end
-            unique_clusters.remove(-1)
-            unique_clusters.append(-1)
-
-        # Use a colorscale that works well for clusters
-        if len(unique_clusters) <= 10:
-            cluster_colorscale = px.colors.qualitative.D3  # Good for distinct clusters
-        else:
-            # For many clusters, use a continuous colorscale
-            cluster_colorscale = px.colors.sequential.Viridis
-
-        # Create color mapping for clusters
-        cluster_colors = {}
-        for i, cluster in enumerate(unique_clusters):
-            if cluster == -1:  # Noise points
-                cluster_colors[cluster] = "rgba(150,150,150,0.5)"  # Gray for noise
-            else:
-                # Regular clusters
-                if len(unique_clusters) - (1 if -1 in unique_clusters else 0) <= 10:
-                    colorscale_idx = i % len(cluster_colorscale)
-                    cluster_colors[cluster] = cluster_colorscale[colorscale_idx]
-                else:
-                    # For many clusters, distribute colors evenly
-                    n_real_clusters = len(unique_clusters) - (
-                        1 if -1 in unique_clusters else 0
-                    )
-                    idx = i / (n_real_clusters - 1) if n_real_clusters > 1 else 0
-                    idx = min(0.99, max(0, idx))  # Ensure it's between 0 and 1
-                    color_idx = int(idx * (len(cluster_colorscale) - 1))
-                    cluster_colors[cluster] = cluster_colorscale[color_idx]
-
-        # Initialize our figure
-
-        # Heatmap visualization
-        if visualization_type == "heatmap":
-
-            fig = go.Figure()
-
-            # Get UMAP coordinates
-            umap_data = umap_df[["UMAP1", "UMAP2"]].to_numpy()
-
-            # Create the grid for the heatmap
-            x_min, x_max = umap_data[:, 0].min() - 0.5, umap_data[:, 0].max() + 0.5
-            y_min, y_max = umap_data[:, 1].min() - 0.5, umap_data[:, 1].max() + 0.5
-
-            # Create a meshgrid
-            grid_size = 200
-            x_grid = np.linspace(x_min, x_max, grid_size)
-            y_grid = np.linspace(y_min, y_max, grid_size)
-            xx, yy = np.meshgrid(x_grid, y_grid)
-            grid_points = np.column_stack([xx.flatten(), yy.flatten()])
-
-            # Compute KDE (Kernel Density Estimation)
-            kde = gaussian_kde(umap_data.T, bw_method=heatmap_bandwidth)
-            densities = kde(grid_points.T).reshape(grid_size, grid_size)
-
-            # Add heatmap
-            fig.add_trace(
-                go.Heatmap(
-                    x=x_grid,
-                    y=y_grid,
-                    z=densities,
-                    colorscale=heatmap_colorscale,
-                    showscale=True,
-                    colorbar=dict(title="Density"),
-                    hoverinfo="none",
-                )
-            )
-
-            # Optionally, overlay scatter points with reduced opacity for context
-            if show_points_overlay == "yes":
-                if color_mode == "file":
-                    # Color by file source with reduced opacity
-                    for label in umap_df["file_label"].unique():
-                        mask = umap_df["file_label"] == label
-                        df_subset = umap_df[mask]
-
-                        fig.add_trace(
-                            go.Scatter(
-                                x=df_subset["UMAP1"],
-                                y=df_subset["UMAP2"],
-                                mode="markers",
-                                marker=dict(
-                                    size=4,  # Smaller points
-                                    color=color_map[label],
-                                    opacity=0.3,  # Reduced opacity
-                                    line=dict(width=0),
-                                ),
-                                name=f"{label} ({len(df_subset)} pts)",
-                                showlegend=True,
-                            )
-                        )
-                elif color_mode == "cluster":
-                    # Color by DBSCAN cluster with reduced opacity
-                    for cluster in unique_clusters:
-                        mask = cluster_labels == cluster
-                        cluster_points = umap_df.iloc[mask]
-
-                        # For noise points, make them smaller and more transparent
-                        marker_size = 3 if cluster == -1 else 4
-                        marker_opacity = 0.2 if cluster == -1 else 0.3
-
-                        fig.add_trace(
-                            go.Scatter(
-                                x=cluster_points["UMAP1"],
-                                y=cluster_points["UMAP2"],
-                                mode="markers",
-                                marker=dict(
-                                    size=marker_size,
-                                    color=cluster_colors[cluster],
-                                    opacity=marker_opacity,
-                                    line=dict(width=0),
-                                ),
-                                name=f"Cluster {cluster if cluster != -1 else 'Noise'} ({len(cluster_points)} pts)",
-                                showlegend=True,
-                            )
-                        )
-        else:
-            # Original scatter plot visualization
-            fig = go.Figure()
-
-            # Visualization based on color mode
-            if color_mode == "file":
-                # Color by file source (original coloring)
-                # Add traces for each file label
-                for label in unique_labels:
-                    mask = umap_df["file_label"] == label
-                    df_subset = umap_df[mask]
-
-                    fig.add_trace(
-                        go.Scatter(
-                            x=df_subset["UMAP1"],
-                            y=df_subset["UMAP2"],
-                            mode="markers",
-                            marker=dict(
-                                size=7,
-                                color=color_map[label],
-                                opacity=point_opacity,
-                                line=dict(width=0),
-                            ),
-                            name=f"{label} ({len(df_subset)} pts)",
-                            showlegend=True,
-                        )
-                    )
-
-            elif color_mode == "cluster":
-                # Color by DBSCAN cluster
-                # Add points for each cluster
-                for cluster in unique_clusters:
-                    mask = cluster_labels == cluster
-
-                    # Get points for this cluster
-                    cluster_points = umap_df.iloc[mask]
-
-                    # For noise points, make them smaller and more transparent
-                    marker_size = 5 if cluster == -1 else 7
-                    marker_opacity = (
-                        point_opacity * 0.7 if cluster == -1 else point_opacity
-                    )
-
-                    # Add trace for this cluster
-                    fig.add_trace(
-                        go.Scatter(
-                            x=cluster_points["UMAP1"],
-                            y=cluster_points["UMAP2"],
-                            mode="markers",
-                            marker=dict(
-                                size=marker_size,
-                                color=cluster_colors[cluster],
-                                opacity=marker_opacity,
-                                line=dict(width=0),
-                            ),
-                            name=f"Cluster {cluster if cluster != -1 else 'Noise'} ({len(cluster_points)} pts)",
-                            showlegend=True,
-                        )
-                    )
-
-        # Update figure properties
-        title_suffix = ""
-        if color_mode == "cluster":
-            n_clusters = len(set(cluster_labels)) - (1 if -1 in cluster_labels else 0)
-            n_noise = np.sum(cluster_labels == -1)
-            title_suffix = f" - {n_clusters} clusters detected"
-
-        # Adjust legend position based on number of traces
-        legend_y_position = (
-            -0.5 if len(fig.data) > 12 else -0.4 if len(fig.data) > 8 else -0.3
-        )
-
-        # Create legend configuration
-        legend_config = dict(
-            orientation="h",
-            yanchor="top",  # Anchor to the top of the legend box
-            y=legend_y_position,
-            xanchor="center",
-            x=0.5,
-            bgcolor="rgba(255,255,255,0.95)",  # More opaque background for readability
-            bordercolor="lightgray",
-            borderwidth=1,
-            font=dict(size=10),  # Smaller font for many items
-            itemwidth=30,  # Smaller item width for more compact, richer color symbols
-            itemsizing="constant",
-            tracegroupgap=5,  # Reduced gap between legend groups
-        )
-
-        # Adjust figure height based on legend size - more space for many clusters
-        figure_height = 600
-        if len(fig.data) > 15:
-            figure_height = 750
-        elif len(fig.data) > 10:
-            figure_height = 700
-        elif len(fig.data) > 6:
-            figure_height = 650
-
-        # Apply the layout settings
-        if visualization_type == "heatmap":
-            title = f"UMAP Density Heatmap (n_neighbors={num_neighbors}, min_dist={min_dist}){title_suffix}"
-        else:
-            title = f"UMAP Embedding (n_neighbors={num_neighbors}, min_dist={min_dist}){title_suffix}"
-
-        fig.update_layout(
-            height=figure_height,
-            title=title,
-            xaxis_title="UMAP1",
-            yaxis_title="UMAP2",
-            legend_title=f"{'Clusters' if color_mode == 'cluster' else 'Data File'}",
-            dragmode="lasso",
-            legend=legend_config,
-            modebar=dict(
-                add=["lasso2d", "select2d"],
-                remove=["pan2d", "autoScale2d"],
-                orientation="h",
-                bgcolor="rgba(255,255,255,0.9)",
-                color="rgba(68,68,68,1)",
-                activecolor="rgba(254,95,85,1)",
-            ),
-            margin=dict(l=50, r=50, t=50, b=100),  # Increased bottom margin for legend
-            showlegend=True,
-        )
-
-        # Store data for other callbacks
-        combined_data_json = {
-            "combined_df": (
-                combined_df.to_json(date_format="iso", orient="split")
-                if not combined_df.empty
-                else "{}"
-            ),
-            "umap_coords": umap_df.to_json(date_format="iso", orient="split"),
-            "selected_features_graph1": all_selected_features,
-            "cluster_labels": (
-                cluster_labels.tolist() if len(cluster_labels) > 0 else []
-            ),
-        }
-
-        # Calculate clustering metrics WITH SMART CONFIDENCE
-        metrics_children = []
-        if (
-            not umap_df.empty
-            and "UMAP1" in umap_df.columns
-            and "UMAP2" in umap_df.columns
-        ):
-            try:
-                # Get UMAP coordinates for clustering
-                X_umap = umap_df[["UMAP1", "UMAP2"]].to_numpy()
-
-                # Scale the data for better DBSCAN performance
-                scaler = StandardScaler()
-                X_umap_scaled = scaler.fit_transform(X_umap)
-
-                # Find optimal DBSCAN parameters
-                eps_candidates = np.linspace(0.1, 1.0, 10)
-                best_eps = 0.5
-                max_clusters = 0
-
-                for eps in eps_candidates:
-                    dbscan = DBSCAN(eps=eps, min_samples=5)
-                    labels = dbscan.fit_predict(X_umap_scaled)
-                    n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
-                    noise_count = np.sum(labels == -1)
-                    noise_ratio = noise_count / len(labels) if len(labels) > 0 else 0
-
-                    if (
-                        n_clusters >= 2
-                        and noise_ratio < 0.5
-                        and n_clusters > max_clusters
-                    ):
-                        max_clusters = n_clusters
-                        best_eps = eps
-
-                # Run DBSCAN with best parameters
-                dbscan = DBSCAN(eps=best_eps, min_samples=5)
-                cluster_labels = dbscan.fit_predict(X_umap_scaled)
-
-                # Collect metrics for confidence calculation
-                metrics = {}
-                unique_clusters = set(cluster_labels)
-                n_clusters = len(unique_clusters) - (1 if -1 in unique_clusters else 0)
-                n_noise = np.sum(cluster_labels == -1)
-                noise_ratio = (
-                    n_noise / len(cluster_labels) if len(cluster_labels) > 0 else 0
-                )
-
-                metrics["noise_ratio"] = noise_ratio
-
-                # Calculate selected metrics
-                if n_clusters >= 2:
-                    mask = cluster_labels != -1
-                    non_noise_points = np.sum(mask)
-                    non_noise_clusters = len(set(cluster_labels[mask]))
-
-                    if non_noise_points > non_noise_clusters and non_noise_clusters > 1:
-                        if "silhouette" in selected_metrics:
-                            metrics["silhouette"] = silhouette_score(
-                                X_umap_scaled[mask], cluster_labels[mask]
-                            )
-
-                        if "davies_bouldin" in selected_metrics:
-                            metrics["davies_bouldin"] = davies_bouldin_score(
-                                X_umap_scaled[mask], cluster_labels[mask]
-                            )
-
-                        if "calinski_harabasz" in selected_metrics:
-                            metrics["calinski_harabasz"] = calinski_harabasz_score(
-                                X_umap_scaled[mask], cluster_labels[mask]
-                            )
-
-                        if "hopkins" in selected_metrics:
-                            metrics["hopkins"] = hopkins_statistic(X_umap_scaled)
-
-                        if "stability" in selected_metrics:
-                            metrics["stability"] = cluster_stability(
-                                X_umap_scaled, best_eps, 5, n_iterations=3
-                            )
-
-                        if (
-                            "physics_consistency" in selected_metrics
-                            and combined_df is not None
-                            and not combined_df.empty
-                        ):
-                            physics_metrics = physics_cluster_consistency(
-                                combined_df, cluster_labels
-                            )
-                            metrics.update(physics_metrics)
-
-                # SMART CONFIDENCE CALCULATION
-                confidence_data = calculate_adaptive_confidence_score(
-                    metrics, clustering_method="dbscan"
-                )
-
-                # Create the smart confidence UI
-                metrics_children = [create_smart_confidence_ui(confidence_data)]
-
-            except Exception as e:
-                traceback.format_exc()
-                metrics_children = [html.Div(f"Error calculating confidence: {str(e)}")]
-        else:
-            metrics_children = [html.Div("Run UMAP to see reliability assessment")]
-
-        return fig, debug_str, combined_data_json, metrics_children
-
-    except Exception as e:
-        print(f"Error in update_umap: {e}")
-
-        traceback.print_exc()
-        return (
-            {},
-            f"Error computing UMAP: {str(e)}",
-            {},
-            [html.Div(f"Error computing UMAP: {str(e)}")],
-        )
+# @callback(
+#     Output("umap-graph", "figure"),
+#     Output("debug-output", "children"),
+#     Output("combined-data-store", "data"),
+#     Output("umap-quality-metrics", "children"),
+#     Input("run-umap", "n_clicks"),
+#     State("stored-files", "data"),
+#     State("umap-file-selector", "value"),
+#     State("num-neighbors", "value"),
+#     State("min-dist", "value"),
+#     State("sample-frac", "value"),
+#     State({"type": "feature-selector-graph1", "category": ALL}, "value"),
+#     State("metric-selector", "value"),
+#     State("point-opacity", "value"),
+#     State("color-mode", "value"),
+#     State("visualization-type", "value"),
+#     State("heatmap-bandwidth", "value"),
+#     State("heatmap-colorscale", "value"),
+#     State("show-points-overlay", "value"),
+#     State("file-config-assignments-store", "data"),
+#     State("configuration-profiles-store", "data"),
+#     prevent_initial_call=True,
+# )
+# def update_umap(
+#     n_clicks,
+#     stored_files,
+#     selected_ids,
+#     num_neighbors,
+#     min_dist,
+#     sample_frac,
+#     selected_features_list,
+#     selected_metrics,
+#     point_opacity,
+#     color_mode,
+#     visualization_type,
+#     heatmap_bandwidth,
+#     heatmap_colorscale,
+#     show_points_overlay,
+#     assignments_store,
+#     profiles_store,
+# ):
+#     """Compute UMAP embedding on selected files using selected features."""
+#     if not stored_files:
+#         return {}, "No files uploaded.", {}, [html.Div("No files uploaded.")]
+
+#     if not selected_ids:
+#         return {}, "No files selected for UMAP.", {}, [html.Div("No files selected.")]
+
+#     try:
+#         # Collect all selected features
+#         all_selected_features = []
+#         for features in selected_features_list:
+#             if features:  # Only add non-empty lists
+#                 all_selected_features.extend(features)
+
+#         sampled_dfs = []
+#         debug_str = ""
+#         selection_dfs = []  # Separate list for selection files to handle differently
+
+#         # Process each selected file
+#         for f in stored_files:
+#             if f["id"] in selected_ids:
+#                 try:
+#                     df = pd.read_json(f["data"], orient="split")
+#                     is_selection = f.get("is_selection", False)
+
+#                     if is_selection:
+#                         # This is a saved selection file
+#                         debug_str += f"{f['filename']}: Selection file with {len(df)} events.<br>"
+
+#                         # Make sure it has required columns for visualization
+#                         if (
+#                             "UMAP1" in df.columns
+#                             and "UMAP2" in df.columns
+#                             and "file_label" in df.columns
+#                         ):
+#                             selection_dfs.append(df)
+#                         else:
+#                             debug_str += f"Warning: Selection file {f['filename']} is missing required columns.<br>"
+#                     else:
+#                         # Regular COLTRIMS file - apply configuration-aware physics features
+#                         df["file_label"] = f["filename"]  # Add file name as a label
+
+#                         # Check if physics features already exist, if not calculate them
+#                         if not has_physics_features(df):
+#                             # Get profile assignment for this file
+#                             profile_name = (
+#                                 assignments_store.get(f["filename"])
+#                                 if assignments_store
+#                                 else None
+#                             )
+
+#                             if (
+#                                 profile_name
+#                                 and profile_name != "none"
+#                                 and profiles_store
+#                                 and profile_name in profiles_store
+#                             ):
+#                                 # Calculate with assigned profile
+#                                 profile_config = profiles_store[profile_name]
+#                                 try:
+#                                     df = calculate_physics_features_with_profile(
+#                                         df, profile_config
+#                                     )
+#                                     debug_str += f"Applied profile '{profile_name}' to {f['filename']}<br>"
+#                                 except Exception as e:
+#                                     debug_str += f"Error applying profile to {f['filename']}: {str(e)}<br>"
+#                                     # Fallback to flexible calculation
+#                                     df = calculate_physics_features_flexible(df, None)
+#                             else:
+#                                 # No profile assigned, use flexible calculation
+#                                 df = calculate_physics_features_flexible(df, None)
+#                                 if assignments_store:
+#                                     debug_str += f"No profile assigned for {f['filename']}, using default calculation<br>"
+
+#                         # Sample the data
+#                         sample_size = int(len(df) * sample_frac)
+#                         if sample_size > 0 and sample_size < len(df):
+#                             df = df.sample(n=sample_size, random_state=42).reset_index(
+#                                 drop=True
+#                             )
+
+#                         sampled_dfs.append(df)
+#                         debug_str += (
+#                             f"{f['filename']}: {len(df)} events after sampling.<br>"
+#                         )
+#                 except Exception as e:
+#                     debug_str += f"Error processing {f['filename']}: {str(e)}.<br>"
+
+#         # Process regular COLTRIMS files (if any)
+#         combined_df = None
+#         umap_df = pd.DataFrame(columns=["UMAP1", "UMAP2", "file_label"])
+
+#         if len(sampled_dfs) > 0:
+#             # Combine all selected datasets
+#             combined_df = pd.concat(sampled_dfs, ignore_index=True).reset_index(
+#                 drop=True
+#             )
+#             debug_str += f"Combined data shape: {combined_df.shape}.<br>"
+
+#             # Use selected features for UMAP
+#             if all_selected_features and len(all_selected_features) > 0:
+#                 feature_cols = [
+#                     col for col in combined_df.columns if col in all_selected_features
+#                 ]
+#                 if feature_cols:
+#                     debug_str += f"Using selected features for UMAP: {', '.join(feature_cols)}<br>"
+#                     X = combined_df[feature_cols].to_numpy()
+#                 else:
+#                     # Fallback to original momentum columns
+#                     original_cols = [
+#                         col
+#                         for col in combined_df.columns
+#                         if col.startswith("particle_")
+#                     ]
+#                     X = combined_df[original_cols].to_numpy()
+#                     debug_str += "No valid features selected, using original momentum components.<br>"
+#             else:
+#                 # Use original momentum columns
+#                 original_cols = [
+#                     col for col in combined_df.columns if col.startswith("particle_")
+#                 ]
+#                 X = combined_df[original_cols].to_numpy()
+#                 debug_str += (
+#                     "No features selected, using original momentum components.<br>"
+#                 )
+
+#             # Run UMAP
+#             reducer = umap.UMAP(
+#                 n_components=2,
+#                 n_neighbors=int(num_neighbors),
+#                 min_dist=float(min_dist),
+#                 metric="euclidean",
+#                 random_state=42,
+#             )
+
+#             # Handle NaN/inf values
+#             X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+
+#             # Fit UMAP
+#             umap_data = reducer.fit_transform(X)
+
+#             # Create DataFrame for visualization
+#             umap_df = pd.DataFrame(umap_data, columns=["UMAP1", "UMAP2"])
+#             umap_df["file_label"] = combined_df["file_label"]
+#         else:
+#             combined_df = pd.DataFrame()
+
+#         # Add any selection files directly to the visualization
+#         for sel_df in selection_dfs:
+#             # Add the selection data to the UMAP visualization data
+#             # Use only the necessary columns for visualization
+#             selection_viz_df = sel_df[["UMAP1", "UMAP2", "file_label"]].copy()
+
+#             # Append to the UMAP dataframe
+#             umap_df = pd.concat([umap_df, selection_viz_df], ignore_index=True)
+
+#         # Calculate clustering for DBSCAN coloring (do this regardless of color mode)
+
+#         # Get UMAP coordinates for clustering
+#         X_umap = umap_df[["UMAP1", "UMAP2"]].to_numpy()
+
+#         # Scale the data for better DBSCAN performance
+#         scaler = StandardScaler()
+#         X_umap_scaled = scaler.fit_transform(X_umap)
+
+#         # Find a reasonable epsilon
+#         eps_candidates = np.linspace(0.1, 1.0, 10)
+#         best_eps = 0.5  # Default
+#         max_clusters = 0
+
+#         # Try different eps values and pick the one that gives a reasonable number of clusters
+#         for eps in eps_candidates:
+#             dbscan = DBSCAN(eps=eps, min_samples=5)
+#             labels = dbscan.fit_predict(X_umap_scaled)
+#             n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+
+#             # We want to maximize the number of clusters but avoid too many noise points
+#             noise_count = np.sum(labels == -1)
+#             noise_ratio = noise_count / len(labels) if len(labels) > 0 else 0
+
+#             # Good balance: enough clusters but not too many noise points
+#             if n_clusters >= 2 and noise_ratio < 0.5 and n_clusters > max_clusters:
+#                 max_clusters = n_clusters
+#                 best_eps = eps
+
+#         # Run DBSCAN with the best eps
+#         dbscan = DBSCAN(eps=best_eps, min_samples=5)
+#         cluster_labels = dbscan.fit_predict(X_umap_scaled)
+
+#         # Create color mappings for both file and cluster modes
+#         # Color mapping for file labels
+#         unique_labels = umap_df["file_label"].unique()
+#         colorscale = px.colors.qualitative.Plotly  # Use Plotly's default colorscale
+#         color_map = {
+#             label: colorscale[i % len(colorscale)]
+#             for i, label in enumerate(unique_labels)
+#         }
+
+#         # Color mapping for clusters
+#         # Special handling for noise points (-1 label)
+#         unique_clusters = sorted(set(cluster_labels))
+#         if -1 in unique_clusters:
+#             # Move noise to the end
+#             unique_clusters.remove(-1)
+#             unique_clusters.append(-1)
+
+#         # Use a colorscale that works well for clusters
+#         if len(unique_clusters) <= 10:
+#             cluster_colorscale = px.colors.qualitative.D3  # Good for distinct clusters
+#         else:
+#             # For many clusters, use a continuous colorscale
+#             cluster_colorscale = px.colors.sequential.Viridis
+
+#         # Create color mapping for clusters
+#         cluster_colors = {}
+#         for i, cluster in enumerate(unique_clusters):
+#             if cluster == -1:  # Noise points
+#                 cluster_colors[cluster] = "rgba(150,150,150,0.5)"  # Gray for noise
+#             else:
+#                 # Regular clusters
+#                 if len(unique_clusters) - (1 if -1 in unique_clusters else 0) <= 10:
+#                     colorscale_idx = i % len(cluster_colorscale)
+#                     cluster_colors[cluster] = cluster_colorscale[colorscale_idx]
+#                 else:
+#                     # For many clusters, distribute colors evenly
+#                     n_real_clusters = len(unique_clusters) - (
+#                         1 if -1 in unique_clusters else 0
+#                     )
+#                     idx = i / (n_real_clusters - 1) if n_real_clusters > 1 else 0
+#                     idx = min(0.99, max(0, idx))  # Ensure it's between 0 and 1
+#                     color_idx = int(idx * (len(cluster_colorscale) - 1))
+#                     cluster_colors[cluster] = cluster_colorscale[color_idx]
+
+#         # Initialize our figure
+
+#         # Heatmap visualization
+#         if visualization_type == "heatmap":
+
+#             fig = go.Figure()
+
+#             # Get UMAP coordinates
+#             umap_data = umap_df[["UMAP1", "UMAP2"]].to_numpy()
+
+#             # Create the grid for the heatmap
+#             x_min, x_max = umap_data[:, 0].min() - 0.5, umap_data[:, 0].max() + 0.5
+#             y_min, y_max = umap_data[:, 1].min() - 0.5, umap_data[:, 1].max() + 0.5
+
+#             # Create a meshgrid
+#             grid_size = 200
+#             x_grid = np.linspace(x_min, x_max, grid_size)
+#             y_grid = np.linspace(y_min, y_max, grid_size)
+#             xx, yy = np.meshgrid(x_grid, y_grid)
+#             grid_points = np.column_stack([xx.flatten(), yy.flatten()])
+
+#             # Compute KDE (Kernel Density Estimation)
+#             kde = gaussian_kde(umap_data.T, bw_method=heatmap_bandwidth)
+#             densities = kde(grid_points.T).reshape(grid_size, grid_size)
+
+#             # Add heatmap
+#             fig.add_trace(
+#                 go.Heatmap(
+#                     x=x_grid,
+#                     y=y_grid,
+#                     z=densities,
+#                     colorscale=heatmap_colorscale,
+#                     showscale=True,
+#                     colorbar=dict(title="Density"),
+#                     hoverinfo="none",
+#                 )
+#             )
+
+#             # Optionally, overlay scatter points with reduced opacity for context
+#             if show_points_overlay == "yes":
+#                 if color_mode == "file":
+#                     # Color by file source with reduced opacity
+#                     for label in umap_df["file_label"].unique():
+#                         mask = umap_df["file_label"] == label
+#                         df_subset = umap_df[mask]
+
+#                         fig.add_trace(
+#                             go.Scatter(
+#                                 x=df_subset["UMAP1"],
+#                                 y=df_subset["UMAP2"],
+#                                 mode="markers",
+#                                 marker=dict(
+#                                     size=4,  # Smaller points
+#                                     color=color_map[label],
+#                                     opacity=0.3,  # Reduced opacity
+#                                     line=dict(width=0),
+#                                 ),
+#                                 name=f"{label} ({len(df_subset)} pts)",
+#                                 showlegend=True,
+#                             )
+#                         )
+#                 elif color_mode == "cluster":
+#                     # Color by DBSCAN cluster with reduced opacity
+#                     for cluster in unique_clusters:
+#                         mask = cluster_labels == cluster
+#                         cluster_points = umap_df.iloc[mask]
+
+#                         # For noise points, make them smaller and more transparent
+#                         marker_size = 3 if cluster == -1 else 4
+#                         marker_opacity = 0.2 if cluster == -1 else 0.3
+
+#                         fig.add_trace(
+#                             go.Scatter(
+#                                 x=cluster_points["UMAP1"],
+#                                 y=cluster_points["UMAP2"],
+#                                 mode="markers",
+#                                 marker=dict(
+#                                     size=marker_size,
+#                                     color=cluster_colors[cluster],
+#                                     opacity=marker_opacity,
+#                                     line=dict(width=0),
+#                                 ),
+#                                 name=f"Cluster {cluster if cluster != -1 else 'Noise'} ({len(cluster_points)} pts)",
+#                                 showlegend=True,
+#                             )
+#                         )
+#         else:
+#             # Original scatter plot visualization
+#             fig = go.Figure()
+
+#             # Visualization based on color mode
+#             if color_mode == "file":
+#                 # Color by file source (original coloring)
+#                 # Add traces for each file label
+#                 for label in unique_labels:
+#                     mask = umap_df["file_label"] == label
+#                     df_subset = umap_df[mask]
+
+#                     fig.add_trace(
+#                         go.Scatter(
+#                             x=df_subset["UMAP1"],
+#                             y=df_subset["UMAP2"],
+#                             mode="markers",
+#                             marker=dict(
+#                                 size=7,
+#                                 color=color_map[label],
+#                                 opacity=point_opacity,
+#                                 line=dict(width=0),
+#                             ),
+#                             name=f"{label} ({len(df_subset)} pts)",
+#                             showlegend=True,
+#                         )
+#                     )
+
+#             elif color_mode == "cluster":
+#                 # Color by DBSCAN cluster
+#                 # Add points for each cluster
+#                 for cluster in unique_clusters:
+#                     mask = cluster_labels == cluster
+
+#                     # Get points for this cluster
+#                     cluster_points = umap_df.iloc[mask]
+
+#                     # For noise points, make them smaller and more transparent
+#                     marker_size = 5 if cluster == -1 else 7
+#                     marker_opacity = (
+#                         point_opacity * 0.7 if cluster == -1 else point_opacity
+#                     )
+
+#                     # Add trace for this cluster
+#                     fig.add_trace(
+#                         go.Scatter(
+#                             x=cluster_points["UMAP1"],
+#                             y=cluster_points["UMAP2"],
+#                             mode="markers",
+#                             marker=dict(
+#                                 size=marker_size,
+#                                 color=cluster_colors[cluster],
+#                                 opacity=marker_opacity,
+#                                 line=dict(width=0),
+#                             ),
+#                             name=f"Cluster {cluster if cluster != -1 else 'Noise'} ({len(cluster_points)} pts)",
+#                             showlegend=True,
+#                         )
+#                     )
+
+#         # Update figure properties
+#         title_suffix = ""
+#         if color_mode == "cluster":
+#             n_clusters = len(set(cluster_labels)) - (1 if -1 in cluster_labels else 0)
+#             n_noise = np.sum(cluster_labels == -1)
+#             title_suffix = f" - {n_clusters} clusters detected"
+
+#         # Adjust legend position based on number of traces
+#         legend_y_position = (
+#             -0.5 if len(fig.data) > 12 else -0.4 if len(fig.data) > 8 else -0.3
+#         )
+
+#         # Create legend configuration
+#         legend_config = dict(
+#             orientation="h",
+#             yanchor="top",  # Anchor to the top of the legend box
+#             y=legend_y_position,
+#             xanchor="center",
+#             x=0.5,
+#             bgcolor="rgba(255,255,255,0.95)",  # More opaque background for readability
+#             bordercolor="lightgray",
+#             borderwidth=1,
+#             font=dict(size=10),  # Smaller font for many items
+#             itemwidth=30,  # Smaller item width for more compact, richer color symbols
+#             itemsizing="constant",
+#             tracegroupgap=5,  # Reduced gap between legend groups
+#         )
+
+#         # Adjust figure height based on legend size - more space for many clusters
+#         figure_height = 600
+#         if len(fig.data) > 15:
+#             figure_height = 750
+#         elif len(fig.data) > 10:
+#             figure_height = 700
+#         elif len(fig.data) > 6:
+#             figure_height = 650
+
+#         # Apply the layout settings
+#         if visualization_type == "heatmap":
+#             title = f"UMAP Density Heatmap (n_neighbors={num_neighbors}, min_dist={min_dist}){title_suffix}"
+#         else:
+#             title = f"UMAP Embedding (n_neighbors={num_neighbors}, min_dist={min_dist}){title_suffix}"
+
+#         fig.update_layout(
+#             height=figure_height,
+#             title=title,
+#             xaxis_title="UMAP1",
+#             yaxis_title="UMAP2",
+#             legend_title=f"{'Clusters' if color_mode == 'cluster' else 'Data File'}",
+#             dragmode="lasso",
+#             legend=legend_config,
+#             modebar=dict(
+#                 add=["lasso2d", "select2d"],
+#                 remove=["pan2d", "autoScale2d"],
+#                 orientation="h",
+#                 bgcolor="rgba(255,255,255,0.9)",
+#                 color="rgba(68,68,68,1)",
+#                 activecolor="rgba(254,95,85,1)",
+#             ),
+#             margin=dict(l=50, r=50, t=50, b=100),  # Increased bottom margin for legend
+#             showlegend=True,
+#         )
+
+#         # Store data for other callbacks
+#         combined_data_json = {
+#             "combined_df": (
+#                 combined_df.to_json(date_format="iso", orient="split")
+#                 if not combined_df.empty
+#                 else "{}"
+#             ),
+#             "umap_coords": umap_df.to_json(date_format="iso", orient="split"),
+#             "selected_features_graph1": all_selected_features,
+#             "cluster_labels": (
+#                 cluster_labels.tolist() if len(cluster_labels) > 0 else []
+#             ),
+#         }
+
+#         # Calculate clustering metrics WITH SMART CONFIDENCE
+#         metrics_children = []
+#         if (
+#             not umap_df.empty
+#             and "UMAP1" in umap_df.columns
+#             and "UMAP2" in umap_df.columns
+#         ):
+#             try:
+#                 # Get UMAP coordinates for clustering
+#                 X_umap = umap_df[["UMAP1", "UMAP2"]].to_numpy()
+
+#                 # Scale the data for better DBSCAN performance
+#                 scaler = StandardScaler()
+#                 X_umap_scaled = scaler.fit_transform(X_umap)
+
+#                 # Find optimal DBSCAN parameters
+#                 eps_candidates = np.linspace(0.1, 1.0, 10)
+#                 best_eps = 0.5
+#                 max_clusters = 0
+
+#                 for eps in eps_candidates:
+#                     dbscan = DBSCAN(eps=eps, min_samples=5)
+#                     labels = dbscan.fit_predict(X_umap_scaled)
+#                     n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+#                     noise_count = np.sum(labels == -1)
+#                     noise_ratio = noise_count / len(labels) if len(labels) > 0 else 0
+
+#                     if (
+#                         n_clusters >= 2
+#                         and noise_ratio < 0.5
+#                         and n_clusters > max_clusters
+#                     ):
+#                         max_clusters = n_clusters
+#                         best_eps = eps
+
+#                 # Run DBSCAN with best parameters
+#                 dbscan = DBSCAN(eps=best_eps, min_samples=5)
+#                 cluster_labels = dbscan.fit_predict(X_umap_scaled)
+
+#                 # Collect metrics for confidence calculation
+#                 metrics = {}
+#                 unique_clusters = set(cluster_labels)
+#                 n_clusters = len(unique_clusters) - (1 if -1 in unique_clusters else 0)
+#                 n_noise = np.sum(cluster_labels == -1)
+#                 noise_ratio = (
+#                     n_noise / len(cluster_labels) if len(cluster_labels) > 0 else 0
+#                 )
+
+#                 metrics["noise_ratio"] = noise_ratio
+
+#                 # Calculate selected metrics
+#                 if n_clusters >= 2:
+#                     mask = cluster_labels != -1
+#                     non_noise_points = np.sum(mask)
+#                     non_noise_clusters = len(set(cluster_labels[mask]))
+
+#                     if non_noise_points > non_noise_clusters and non_noise_clusters > 1:
+#                         if "silhouette" in selected_metrics:
+#                             metrics["silhouette"] = silhouette_score(
+#                                 X_umap_scaled[mask], cluster_labels[mask]
+#                             )
+
+#                         if "davies_bouldin" in selected_metrics:
+#                             metrics["davies_bouldin"] = davies_bouldin_score(
+#                                 X_umap_scaled[mask], cluster_labels[mask]
+#                             )
+
+#                         if "calinski_harabasz" in selected_metrics:
+#                             metrics["calinski_harabasz"] = calinski_harabasz_score(
+#                                 X_umap_scaled[mask], cluster_labels[mask]
+#                             )
+
+#                         if "hopkins" in selected_metrics:
+#                             metrics["hopkins"] = hopkins_statistic(X_umap_scaled)
+
+#                         if "stability" in selected_metrics:
+#                             metrics["stability"] = cluster_stability(
+#                                 X_umap_scaled, best_eps, 5, n_iterations=3
+#                             )
+
+#                         if (
+#                             "physics_consistency" in selected_metrics
+#                             and combined_df is not None
+#                             and not combined_df.empty
+#                         ):
+#                             physics_metrics = physics_cluster_consistency(
+#                                 combined_df, cluster_labels
+#                             )
+#                             metrics.update(physics_metrics)
+
+#                 # SMART CONFIDENCE CALCULATION
+#                 confidence_data = calculate_adaptive_confidence_score(
+#                     metrics, clustering_method="dbscan"
+#                 )
+
+#                 # Create the smart confidence UI
+#                 metrics_children = [create_smart_confidence_ui(confidence_data)]
+
+#             except Exception as e:
+#                 traceback.format_exc()
+#                 metrics_children = [html.Div(f"Error calculating confidence: {str(e)}")]
+#         else:
+#             metrics_children = [html.Div("Run UMAP to see reliability assessment")]
+
+#         return fig, debug_str, combined_data_json, metrics_children
+
+#     except Exception as e:
+#         print(f"Error in update_umap: {e}")
+
+#         traceback.print_exc()
+#         return (
+#             {},
+#             f"Error computing UMAP: {str(e)}",
+#             {},
+#             [html.Div(f"Error computing UMAP: {str(e)}")],
+#         )
 
 
 # Callback for Graph 2: Selected Points (Stored Coordinates)

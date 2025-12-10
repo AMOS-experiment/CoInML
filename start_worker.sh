@@ -1,6 +1,6 @@
 source .env
 
-export PREFECT_WORK_DIR=$PREFECT_WORK_DIR
+export PREFECT_WORK_DIR=$PWD
 prefect config set PREFECT_API_URL=$PREFECT_API_URL
 
 prefect work-pool create sculpt-pool --type "process"

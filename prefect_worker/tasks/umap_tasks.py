@@ -10,10 +10,9 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
 import umap.umap_ as umap
+from prefect import get_run_logger, task
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
-
-from prefect import get_run_logger, task
 
 
 @task(

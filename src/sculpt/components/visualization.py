@@ -390,6 +390,7 @@ def create_basic_viz_tab():
                                     "Enhanced Custom Scatter Plot",
                                     style={"textAlign": "center"},
                                 ),
+                                # dcc.Store(id="selected-points-store-graph15"),
                                 # Main container with flex layout
                                 html.Div(
                                     [

@@ -556,12 +556,12 @@ def download_selected_points_graph15(
                                 print(
                                     f"Error calculating features for {f['filename']}: {e}"
                                 )
-                                continue  # Skip this file
+                                # Don't skip - continue with raw data
                         else:
                             print(
-                                f"Skipping {f['filename']} - no valid profile assigned"
+                                f"No profile assigned to {f['filename']}, using raw data"
                             )
-                            continue  # Skip files without proper profile assignment
+                            # Don't skip - continue with raw data
 
                     # Add file label
                     df["file_label"] = f["filename"]
@@ -583,7 +583,21 @@ def download_selected_points_graph15(
             print(f"Features {x_feature} or {y_feature} not found in data")
             raise dash.exceptions.PreventUpdate
 
-        # Extract selected points using the coordinates
+        # CRITICAL FIX: Apply unit conversions to match the plot display
+        from sculpt.utils.unit_converter import convert_feature_for_display
+        
+        x_converted, x_unit = convert_feature_for_display(
+            combined_df[x_feature], x_feature
+        )
+        y_converted, y_unit = convert_feature_for_display(
+            combined_df[y_feature], y_feature
+        )
+        
+        # Add converted columns for matching
+        combined_df["x_converted"] = x_converted
+        combined_df["y_converted"] = y_converted
+
+        # Extract selected points using CONVERTED coordinates
         selected_indices = []
 
         # Print debug info about selectedData
@@ -599,12 +613,12 @@ def download_selected_points_graph15(
                 f"Box selection: x=[{x_range[0]:.2f}, {x_range[1]:.2f}], y=[{y_range[0]:.2f}, {y_range[1]:.2f}]"
             )
 
-            # Use masked selection
+            # Use CONVERTED values for matching
             selected_mask = (
-                (combined_df[x_feature] >= x_range[0])
-                & (combined_df[x_feature] <= x_range[1])
-                & (combined_df[y_feature] >= y_range[0])
-                & (combined_df[y_feature] <= y_range[1])
+                (combined_df["x_converted"] >= x_range[0])
+                & (combined_df["x_converted"] <= x_range[1])
+                & (combined_df["y_converted"] >= y_range[0])
+                & (combined_df["y_converted"] <= y_range[1])
             )
             selected_indices = np.where(selected_mask)[0].tolist()
             print(f"Found {len(selected_indices)} points in box selection")
@@ -622,9 +636,9 @@ def download_selected_points_graph15(
             # Create a Path object from the lasso points
             lasso_path = Path(np.column_stack([lasso_x, lasso_y]))
 
-            # Check which points are within the lasso path
+            # Check which points are within the lasso path using CONVERTED values
             points_array = np.column_stack(
-                [combined_df[x_feature].values, combined_df[y_feature].values]
+                [combined_df["x_converted"].values, combined_df["y_converted"].values]
             )
             inside_lasso = lasso_path.contains_points(points_array)
 
@@ -646,14 +660,14 @@ def download_selected_points_graph15(
                     # Some plots store index in customdata
                     selected_indices.append(point["customdata"])
                 else:
-                    # Find by coordinates
+                    # Find by coordinates using CONVERTED values
                     x_val = point.get("x")
                     y_val = point.get("y")
 
                     if x_val is not None and y_val is not None:
-                        # Find closest point
-                        distances = (combined_df[x_feature] - x_val) ** 2 + (
-                            combined_df[y_feature] - y_val
+                        # Find closest point using CONVERTED values
+                        distances = (combined_df["x_converted"] - x_val) ** 2 + (
+                            combined_df["y_converted"] - y_val
                         ) ** 2
                         closest_idx = distances.idxmin()
                         selected_indices.append(closest_idx)
@@ -667,8 +681,8 @@ def download_selected_points_graph15(
         # Extract the selected points
         selected_df = combined_df.iloc[selected_indices].reset_index(drop=True)
 
-        # Remove UMAP coordinates if they exist
-        columns_to_drop = ["UMAP1", "UMAP2", "file_label"]
+        # Remove temporary columns and metadata
+        columns_to_drop = ["UMAP1", "UMAP2", "file_label", "x_converted", "y_converted"]
         columns_to_drop = [col for col in columns_to_drop if col in selected_df.columns]
         if columns_to_drop:
             selected_df = selected_df.drop(columns=columns_to_drop)
@@ -730,6 +744,250 @@ def download_selected_points_graph15(
         trace = traceback.format_exc()
         print(trace)
         raise dash.exceptions.PreventUpdate
+
+
+
+
+# @callback(
+#     Output("download-selection-graph15", "data"),
+#     Input("save-selection-graph15-btn", "n_clicks"),
+#     State("selection-filename-graph15", "value"),
+#     State("selected-points-store-graph15", "data"),
+#     State("x-axis-feature-graph15", "value"),
+#     State("y-axis-feature-graph15", "value"),
+#     State("scatter-graph15", "figure"),  # Add the figure data
+#     State("file-selector-graph15", "value"),
+#     State("stored-files", "data"),
+#     State("file-config-assignments-store", "data"),  # ADD THIS
+#     State("configuration-profiles-store", "data"),  # ADD THIS
+#     prevent_initial_call=True,
+# )
+# def download_selected_points_graph15(
+#     n_clicks,
+#     filename,
+#     selectedData,
+#     x_feature,
+#     y_feature,
+#     figure_data,
+#     selected_ids,
+#     stored_files,
+#     assignments_store,
+#     profiles_store,
+# ):  # ADD PARAMETERS
+#     """Generate CSV file of selected points from Graph 1.5 for download."""
+#     if not n_clicks or not filename or not selectedData:
+#         raise dash.exceptions.PreventUpdate
+
+#     print(f"Save button clicked for Graph 1.5, filename: {filename}")
+
+#     try:
+#         # Process selected files to get the combined dataframe
+#         sampled_dfs = []
+
+#         # Build combined dataset from selected files
+#         for f in stored_files:
+#             if f["id"] in selected_ids:
+#                 try:
+#                     df = pd.read_json(f["data"], orient="split")
+#                     is_selection = f.get("is_selection", False)
+
+#                     # Only calculate features for non-selection files that don't have them yet
+#                     if not is_selection and not has_physics_features(df):
+#                         profile_name = (
+#                             assignments_store.get(f["filename"])
+#                             if assignments_store
+#                             else None
+#                         )
+
+#                         if (
+#                             profile_name
+#                             and profile_name != "none"
+#                             and profiles_store
+#                             and profile_name in profiles_store
+#                         ):
+#                             profile_config = profiles_store[profile_name]
+#                             try:
+#                                 df = calculate_physics_features_with_profile(
+#                                     df, profile_config
+#                                 )
+#                             except Exception as e:
+#                                 print(
+#                                     f"Error calculating features for {f['filename']}: {e}"
+#                                 )
+#                                 continue  # Skip this file
+#                         else:
+#                             print(
+#                                 f"Skipping {f['filename']} - no valid profile assigned"
+#                             )
+#                             continue  # Skip files without proper profile assignment
+
+#                     # Add file label
+#                     df["file_label"] = f["filename"]
+#                     sampled_dfs.append(df)
+
+#                 except Exception as e:
+#                     print(f"Error processing {f['filename']} for download: {str(e)}")
+
+#         # Combine datasets
+#         if not sampled_dfs:
+#             print("No valid files selected")
+#             raise dash.exceptions.PreventUpdate
+
+#         combined_df = pd.concat(sampled_dfs, ignore_index=True).reset_index(drop=True)
+#         print(f"Combined dataframe shape: {combined_df.shape}")
+
+#         # Verify features exist
+#         if x_feature not in combined_df.columns or y_feature not in combined_df.columns:
+#             print(f"Features {x_feature} or {y_feature} not found in data")
+#             raise dash.exceptions.PreventUpdate
+
+#         # Extract selected points using the coordinates
+#         selected_indices = []
+
+#         # Print debug info about selectedData
+#         print(f"Selected data type: {type(selectedData)}")
+#         print(f"Selected data content: {selectedData}")
+
+#         # Handle box selection
+#         if "range" in selectedData:
+#             x_range = selectedData["range"]["x"]
+#             y_range = selectedData["range"]["y"]
+
+#             print(
+#                 f"Box selection: x=[{x_range[0]:.2f}, {x_range[1]:.2f}], y=[{y_range[0]:.2f}, {y_range[1]:.2f}]"
+#             )
+
+#             # Use masked selection
+#             selected_mask = (
+#                 (combined_df[x_feature] >= x_range[0])
+#                 & (combined_df[x_feature] <= x_range[1])
+#                 & (combined_df[y_feature] >= y_range[0])
+#                 & (combined_df[y_feature] <= y_range[1])
+#             )
+#             selected_indices = np.where(selected_mask)[0].tolist()
+#             print(f"Found {len(selected_indices)} points in box selection")
+
+#         # Handle lasso selection
+#         elif "lassoPoints" in selectedData:
+#             from matplotlib.path import Path
+
+#             # Extract lasso polygon coordinates
+#             lasso_x = selectedData["lassoPoints"]["x"]
+#             lasso_y = selectedData["lassoPoints"]["y"]
+
+#             print(f"Lasso selection with {len(lasso_x)} points")
+
+#             # Create a Path object from the lasso points
+#             lasso_path = Path(np.column_stack([lasso_x, lasso_y]))
+
+#             # Check which points are within the lasso path
+#             points_array = np.column_stack(
+#                 [combined_df[x_feature].values, combined_df[y_feature].values]
+#             )
+#             inside_lasso = lasso_path.contains_points(points_array)
+
+#             # Get indices of points inside the lasso
+#             selected_indices = np.where(inside_lasso)[0].tolist()
+#             print(f"Found {len(selected_indices)} points in lasso selection")
+
+#         # Handle direct point selection
+#         elif "points" in selectedData and selectedData["points"]:
+#             print(f"Direct selection with {len(selectedData['points'])} points")
+
+#             # Try to extract points directly from the selection
+#             for point in selectedData["points"]:
+#                 print(f"Point data: {point}")
+#                 # Try different ways to get index
+#                 if "pointIndex" in point:
+#                     selected_indices.append(point["pointIndex"])
+#                 elif "customdata" in point and point["customdata"]:
+#                     # Some plots store index in customdata
+#                     selected_indices.append(point["customdata"])
+#                 else:
+#                     # Find by coordinates
+#                     x_val = point.get("x")
+#                     y_val = point.get("y")
+
+#                     if x_val is not None and y_val is not None:
+#                         # Find closest point
+#                         distances = (combined_df[x_feature] - x_val) ** 2 + (
+#                             combined_df[y_feature] - y_val
+#                         ) ** 2
+#                         closest_idx = distances.idxmin()
+#                         selected_indices.append(closest_idx)
+
+#         if not selected_indices:
+#             print("No valid indices found")
+#             raise dash.exceptions.PreventUpdate
+
+#         print(f"Processing {len(selected_indices)} selected points")
+
+#         # Extract the selected points
+#         selected_df = combined_df.iloc[selected_indices].reset_index(drop=True)
+
+#         # Remove UMAP coordinates if they exist
+#         columns_to_drop = ["UMAP1", "UMAP2", "file_label"]
+#         columns_to_drop = [col for col in columns_to_drop if col in selected_df.columns]
+#         if columns_to_drop:
+#             selected_df = selected_df.drop(columns=columns_to_drop)
+
+#         # Get only the particle momentum columns (original data format)
+#         momentum_columns = sorted(
+#             [col for col in selected_df.columns if col.startswith("particle_")]
+#         )
+
+#         # Convert to original format
+#         if (
+#             momentum_columns and len(momentum_columns) == 15
+#         ):  # Should be 5 particles x 3 dimensions
+#             # Create the reverse mapping from standardized to original column names
+#             reverse_columns = [
+#                 "Px_ion1",
+#                 "Py_ion1",
+#                 "Pz_ion1",
+#                 "Px_ion2",
+#                 "Py_ion2",
+#                 "Pz_ion2",
+#                 "Px_neutral",
+#                 "Py_neutral",
+#                 "Pz_neutral",
+#                 "Px_electron1",
+#                 "Py_electron1",
+#                 "Pz_electron1",
+#                 "Px_electron2",
+#                 "Py_electron2",
+#                 "Pz_electron2",
+#             ]
+
+#             # Extract and rename the momentum columns
+#             original_format_df = pd.DataFrame()
+#             for i, col in enumerate(momentum_columns):
+#                 if i < len(reverse_columns):
+#                     original_format_df[reverse_columns[i]] = selected_df[col]
+
+#             # Also include other physics features if available
+#             for col in selected_df.columns:
+#                 if not col.startswith("particle_"):
+#                     original_format_df[col] = selected_df[col]
+#         else:
+#             # If we can't convert back exactly, just use what we have
+#             original_format_df = selected_df
+
+#         print(f"Final export dataframe shape: {original_format_df.shape}")
+#         print(f"Final export dataframe columns: {original_format_df.columns.tolist()}")
+
+#         # Return the dataframe as a CSV for download
+#         return dcc.send_data_frame(
+#             original_format_df.to_csv, f"{filename}.csv", index=False
+#         )
+
+#     except Exception as e:
+#         print(f"Error saving Graph 1.5 selection: {e}")
+#         import traceback
+
+#         trace = traceback.format_exc()
+#         print(trace)
+#         raise dash.exceptions.PreventUpdate
 
 
 @callback(

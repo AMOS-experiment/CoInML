@@ -135,7 +135,7 @@ Modify this file to add or remove hooks as needed.
 ## Example Data
 
 Example COLTRIMS datasets are provided in:
-`data/examples/`
+`data/`
 
 ## Documentation
 

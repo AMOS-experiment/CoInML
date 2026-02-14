@@ -8,6 +8,7 @@ SCULPT is a comprehensive machine learning framework for analyzing high-dimensio
 - **Adaptive confidence scoring** for clustering validation
 - **Genetic programming** for automated feature discovery
 - **Deep autoencoders** for non-linear feature extraction
+- **Mutual information analysis** for feature importance ranking
 - **Flexible molecular configuration** system
 - **Real-time filtering** and selection tools
 
@@ -108,38 +109,49 @@ repos:
 ```
 Modify this file to add or remove hooks as needed.
 
+## Data Format
+
+SCULPT accepts space-delimited (`.dat`, `.txt`) and comma-separated (`.csv`) files containing particle momentum data in atomic units. Each particle requires three momentum columns (`Px`, `Py`, `Pz`) following the naming convention `P{x/y/z}_{type}{number}` (e.g., `Px_ion1`, `Py_electron2`).
+
+For full details on column naming, supported particle types, example files, unit conversions, configuration profiles, computed physics features, and re-uploading saved selections, see **[`DATA_FORMAT.md`](DATA_FORMAT.md)**.
+
 ## Usage
 
-### 1. Data Upload
+### 1. Data Upload & Configuration
 
-- Drag and drop CSV files containing momentum data
-- Expected format: `Px, Py, Pz` for each particle
+- Upload data files via the **Data & Configuration** tab (drag and drop or file selector)
+- Create or select a molecular configuration profile (e.g., D₂O, HDO) specifying particle masses and charges
+- Assign profiles to uploaded files so SCULPT can compute physics features
 
-### 2. Configure Molecular System
+### 2. Basic Analysis
 
-- Select or create a molecular profile (e.g., D₂O, HDO)
-- Assign profiles to uploaded files
+- Choose features for UMAP embedding (momentum, energy, angular, pairwise)
+- Adjust UMAP parameters (`n_neighbors`, `min_dist`, metric)
+- Click **"Run UMAP"** to generate interactive 2D embeddings
+- Color by file, density, or DBSCAN clusters
+- View adaptive confidence scores and clustering quality metrics
 
-### 3. Run Analysis
+### 3. Selection & Filtering
 
-- Choose features for UMAP embedding
-- Adjust parameters (`n_neighbors`, `min_dist`)
-- Click **"Run UMAP"**
+- Use lasso/box selection tools to isolate regions of interest
+- Apply density-based or physics parameter filters
+- Export selected data subsets as CSV files (includes full momentum data for re-analysis)
 
-### 4. Explore Results
+### 4. Advanced Analysis
 
-- Use lasso/box selection tools
-- Apply filters (density, physics parameters)
-- Export selected data
+- Run genetic programming to discover new discriminating features
+- Perform mutual information analysis for feature importance ranking
+- Visualize custom feature plots with unit-converted axes
+
+### 5. Machine Learning
+
+- Train deep autoencoders for non-linear feature extraction
+- Explore latent feature spaces with UMAP
 
 ## Example Data
 
 Example COLTRIMS datasets are provided in:
 `data/`
-
-## Documentation
-
-See the `docs/` directory for detailed documentation.
 
 ## Additional Resources
 - [Pre-commit Documentation](https://pre-commit.com/)
@@ -149,14 +161,14 @@ See the `docs/` directory for detailed documentation.
 
 SCULPT (Supervised Clustering and Uncovering Latent Patterns with Training) Copyright (c) 2025,
 The Regents of the University of California, through Lawrence Berkeley National Laboratory
-(“Berkeley Lab”) subject to receipt of any required approvals from the U.S. Dept. of Energy. All
+("Berkeley Lab") subject to receipt of any required approvals from the U.S. Dept. of Energy. All
 rights reserved.
 
 If you have questions about your rights to use, distribute this software, or use for commercial
 purposes, please contact Berkeley Lab's Intellectual Property Office at IPO@lbl.gov.
 
 NOTICE: This Software was developed under Contract No. DE-AC02-05CH11231 with the
-Department of Energy (“DOE”). During the period of commercialization or such other time period
+Department of Energy ("DOE"). During the period of commercialization or such other time period
 specified by DOE, the U.S. Government is granted for itself and others acting on its behalf a
 nonexclusive, paid-up, irrevocable, worldwide license in the Software to reproduce, prepare
 derivative works, and perform publicly and display publicly, by or on behalf of the U.S.

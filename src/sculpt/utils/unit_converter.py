@@ -3,6 +3,8 @@ Simple unit conversion utilities for COLTRIMS data visualization.
 Apply conversions only at plot time, keeping original data unchanged.
 """
 
+import re
+
 import numpy as np
 import pandas as pd
 
@@ -66,9 +68,82 @@ def convert_feature_for_display(data, feature_name):
     return converted_data, unit_label
 
 
+def _generate_display_name(feature_name):
+    """
+    Generate a human-readable display name from a feature name using pattern matching.
+    Works with any number of particles, not just the default 2-ion/1-neutral/2-electron config.
+
+    Parameters:
+    -----------
+    feature_name : str
+        The internal feature name (e.g., 'energy_ion3', 'theta_electron4')
+
+    Returns:
+    --------
+    str
+        Human-readable display name
+    """
+    # Exact-match special names (configuration-independent summary features)
+    exact_names = {
+        "KER": "KER (Kinetic Energy Release)",
+        "EESum": "Electron Energy Sum",
+        "TotalEnergy": "Total Energy",
+        "EESharing": "Electron Energy Sharing",
+    }
+    if feature_name in exact_names:
+        return exact_names[feature_name]
+
+    # Pattern-based rules: (regex, format_function)
+    # Each rule tries to match and produce a nice display name
+    patterns = [
+        # energy_ion1, energy_D+_ion2, energy_electron3, energy_O_neutral1
+        (r"^energy_(?:(.+)_)?(ion|neutral|electron)(\d+)$",
+         lambda m: f"{m.group(2).capitalize()} {m.group(3)}{' (' + m.group(1) + ')' if m.group(1) else ''} Energy"),
+        # mom_mag_ion1, mom_mag_D+_ion2, mom_mag_electron3
+        (r"^mom_mag_(?:(.+)_)?(ion|neutral|electron)(\d+)$",
+         lambda m: f"{m.group(2).capitalize()} {m.group(3)}{' (' + m.group(1) + ')' if m.group(1) else ''} Momentum"),
+        # theta_ion1, theta_D+_ion2, theta_electron3
+        (r"^theta_(?:(.+)_)?(ion|neutral|electron)(\d+)$",
+         lambda m: f"{m.group(2).capitalize()} {m.group(3)}{' (' + m.group(1) + ')' if m.group(1) else ''} Polar Angle (θ)"),
+        # phi_ion1, phi_D+_ion2, phi_electron3
+        (r"^phi_(?:(.+)_)?(ion|neutral|electron)(\d+)$",
+         lambda m: f"{m.group(2).capitalize()} {m.group(3)}{' (' + m.group(1) + ')' if m.group(1) else ''} Azimuthal Angle (φ)"),
+        # angle_ion1_ion2, angle_electron1_electron2 (named pairs)
+        (r"^angle_(\w+)_(\w+)$",
+         lambda m: f"{m.group(1).replace('_', ' ').title()}-{m.group(2).replace('_', ' ').title()} Angle"),
+        # relative_angle_12, relative_angle_34
+        (r"^relative_angle_(\d+)(\d+)$",
+         lambda m: f"Relative Angle (Particle {m.group(1)}-{m.group(2)})"),
+        # dot_product_12
+        (r"^dot_product_(\d+)(\d+)$",
+         lambda m: f"Dot Product (Particle {m.group(1)}-{m.group(2)})"),
+        # cosine_similarity_12
+        (r"^cosine_similarity_(\d+)(\d+)$",
+         lambda m: f"Cosine Similarity (Particle {m.group(1)}-{m.group(2)})"),
+        # momentum_diff_12
+        (r"^momentum_diff_(\d+)(\d+)$",
+         lambda m: f"Momentum Difference (Particle {m.group(1)}-{m.group(2)})"),
+        # phi_diff_12, theta_diff_12
+        (r"^(phi|theta)_diff_(\d+)(\d+)$",
+         lambda m: f"{'Azimuthal' if m.group(1) == 'phi' else 'Polar'} Angle Difference (Particle {m.group(2)}-{m.group(3)})"),
+        # phi_rel_12, theta_rel_12
+        (r"^(phi|theta)_rel_(\d+)(\d+)$",
+         lambda m: f"{'Azimuthal' if m.group(1) == 'phi' else 'Polar'} Angle Ratio (Particle {m.group(2)}-{m.group(3)})"),
+    ]
+
+    for pattern, formatter in patterns:
+        match = re.match(pattern, feature_name)
+        if match:
+            return formatter(match)
+
+    # Fallback: generic cleanup - replace underscores with spaces and capitalize
+    return feature_name.replace("_", " ").title()
+
+
 def format_axis_title(feature_name, unit_label):
     """
     Format axis title with proper feature name and units.
+    Uses pattern-based name generation to handle any particle configuration.
 
     Parameters:
     -----------
@@ -82,41 +157,7 @@ def format_axis_title(feature_name, unit_label):
     str
         Formatted axis title
     """
-    # Clean up feature name for display
-    display_name = feature_name
-
-    # Special formatting for common features
-    name_mapping = {
-        "KER": "KER (Kinetic Energy Release)",
-        "EESum": "Electron Energy Sum",
-        "TotalEnergy": "Total Energy",
-        "EESharing": "Electron Energy Sharing",
-        "energy_ion1": "Ion 1 Energy",
-        "energy_ion2": "Ion 2 Energy",
-        "energy_electron1": "Electron 1 Energy",
-        "energy_electron2": "Electron 2 Energy",
-        "energy_neutral1": "Neutral Energy",
-        "theta_ion1": "Ion 1 Polar Angle (θ)",
-        "theta_ion2": "Ion 2 Polar Angle (θ)",
-        "theta_electron1": "Electron 1 Polar Angle (θ)",
-        "theta_electron2": "Electron 2 Polar Angle (θ)",
-        "phi_ion1": "Ion 1 Azimuthal Angle (φ)",
-        "phi_ion2": "Ion 2 Azimuthal Angle (φ)",
-        "phi_electron1": "Electron 1 Azimuthal Angle (φ)",
-        "phi_electron2": "Electron 2 Azimuthal Angle (φ)",
-        "relative_angle_ion1_ion2": "Ion-Ion Relative Angle",
-        "relative_angle_electron1_electron2": "Electron-Electron Relative Angle",
-        "mom_mag_ion1": "Ion 1 Momentum",
-        "mom_mag_ion2": "Ion 2 Momentum",
-        "mom_mag_electron1": "Electron 1 Momentum",
-        "mom_mag_electron2": "Electron 2 Momentum",
-    }
-
-    if feature_name in name_mapping:
-        display_name = name_mapping[feature_name]
-    else:
-        # Generic cleanup - replace underscores with spaces and capitalize
-        display_name = feature_name.replace("_", " ").title()
+    display_name = _generate_display_name(feature_name)
 
     # Add units if available
     if unit_label and unit_label != "ratio":
@@ -130,6 +171,32 @@ def format_axis_title(feature_name, unit_label):
             return f"{display_name} ({unit_label})"
     else:
         return display_name
+
+
+def generate_feature_label(feature_name):
+    """
+    Generate a user-friendly label for a feature name, suitable for dropdown menus.
+    Combines the display name with units.
+
+    Parameters:
+    -----------
+    feature_name : str
+        Internal feature name
+
+    Returns:
+    --------
+    str
+        Label with display name and units
+    """
+    display_name = _generate_display_name(feature_name)
+    _, unit_label = convert_feature_for_display([0], feature_name)
+
+    if unit_label and unit_label not in ("", "ratio"):
+        unit_str = {"degrees": "°", "eV": "eV", "a.u.": "a.u."}.get(
+            unit_label, unit_label
+        )
+        return f"{display_name} ({unit_str})"
+    return display_name
 
 
 def apply_unit_conversions_to_plot(fig, x_feature, y_feature, x_data, y_data):

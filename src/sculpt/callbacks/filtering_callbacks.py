@@ -3,6 +3,78 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from dash import Input, Output, State, callback, html
+from sculpt.utils.unit_converter import generate_feature_label
+
+
+
+def _build_physics_filter_options(feature_columns):
+    """
+    Build dropdown options from available physics feature columns.
+    Filters out raw particle momentum columns (particle_*) and metadata columns,
+    keeping only calculated physics features.
+    
+    Returns a list of {label, value} dicts for the dropdown.
+    """
+    from sculpt.utils.unit_converter import generate_feature_label
+
+    # Columns to exclude from the physics parameter filter
+    exclude_patterns = ["particle_", "UMAP", "file_label", "density", "cluster"]
+
+    physics_cols = []
+    for col in feature_columns:
+        if any(col.startswith(p) for p in exclude_patterns):
+            continue
+        physics_cols.append(col)
+
+    # Build options with nice labels
+    options = []
+    for col in physics_cols:
+        label = generate_feature_label(col)
+        options.append({"label": label, "value": col})
+
+    return options
+
+
+# Callback to dynamically populate the physics-parameter-dropdown
+# (Custom Feature Filtering section)
+@callback(
+    Output("physics-parameter-dropdown", "options"),
+    Input("features-data-store", "data"),
+    prevent_initial_call=True,
+)
+def update_physics_filter_dropdowns(features_data):
+    """Dynamically populate the physics parameter filter dropdown
+    based on the actual calculated features, so it works with any
+    particle configuration (not just the default 2 ions/1 neutral/2 electrons)."""
+    if not features_data or "column_names" not in features_data:
+        return []
+
+    return _build_physics_filter_options(features_data["column_names"])
+
+
+# Callback to dynamically populate the umap-physics-parameter-dropdown
+# (UMAP Filtering section)
+@callback(
+    Output("umap-physics-parameter-dropdown", "options"),
+    Input("combined-data-store", "data"),
+    prevent_initial_call=True,
+)
+def update_umap_physics_filter_dropdowns(combined_data_json):
+    """Dynamically populate the UMAP physics parameter filter dropdown
+    based on the actual columns in the combined data after UMAP has been run."""
+    if not combined_data_json or "combined_df" not in combined_data_json:
+        return []
+
+    try:
+        combined_df = pd.read_json(combined_data_json["combined_df"], orient="split")
+        if combined_df.empty:
+            return []
+        return _build_physics_filter_options(combined_df.columns.tolist())
+    except Exception as e:
+        print(f"Error populating UMAP physics filter dropdown: {e}")
+        return []
+
+
 
 from sculpt.utils.metrics.physics_features import (
     calculate_physics_features,

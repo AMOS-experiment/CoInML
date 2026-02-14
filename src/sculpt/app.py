@@ -68,8 +68,13 @@ from sculpt.callbacks.filtering_callbacks import (  # noqa: F401
     update_parameter_filter_controls,
     update_parameter_filter_controls_visibility,
     update_parameter_filter_range,
+    update_physics_filter_dropdowns,
     update_umap_parameter_filter_controls,
+    update_umap_physics_filter_dropdowns,
 )
+# NOTE: update_physics_filter_dropdowns and update_umap_physics_filter_dropdowns
+# are new callbacks that dynamically populate the physics parameter filter dropdowns
+# in the filtering tab, replacing the previously hardcoded options in selection.py.
 from sculpt.callbacks.genetic_callbacks import (  # noqa: F401
     run_genetic_feature_discovery_and_umap,
     update_genetic_umap_status,
@@ -102,16 +107,9 @@ from sculpt.callbacks.visualization_callbacks import (  # noqa: F401
 )
 from sculpt.components.layout import create_layout
 
-# print("Is CUDA available:", torch.cuda.is_available())
-# print("CUDA device count:", torch.cuda.device_count())
-# if torch.cuda.is_available():
-#     print("CUDA device name:", torch.cuda.get_device_name(0))
-
-
-# Constants for physics calculations
-mass_ion = 2 * 1836  # Deuterium ion (D+)
-mass_neutral = 16 * 1836  # Neutral Oxygen atom
-mass_electron = 1  # Electron mass
+# NOTE: Mass constants (mass_ion, mass_neutral, mass_electron) previously defined here
+# have been removed. All physics calculations now use the flexible configuration-aware
+# functions in physics_features.py which get masses from the assigned particle profile.
 
 app = dash.Dash(
     __name__,
@@ -125,4 +123,3 @@ app.layout = create_layout()
 
 if __name__ == "__main__":
     app.run(debug=True, port=9000)
-    # app.run_server(debug=True, port=9000)

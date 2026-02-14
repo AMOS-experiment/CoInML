@@ -124,23 +124,33 @@ def cluster_stability(X, eps, min_samples, n_iterations=5, noise_level=0.05):
 
 
 def physics_cluster_consistency(df, cluster_labels):
-    """Calculate consistency of physics parameters within clusters."""
+    """Calculate consistency of physics parameters within clusters.
+    
+    Dynamically detects all available physics features instead of 
+    using a hardcoded list, so it works with any particle configuration.
+    """
     # Map cluster labels back to the full dataframe
     df_with_clusters = df.copy()
     df_with_clusters["cluster"] = cluster_labels
 
-    # Select key physics quantities
-    physics_features = [
-        "KER",
-        "EESum",
-        "EEsharing",
-        "energy_ion1",
-        "energy_ion2",
-        "energy_electron1",
-        "energy_electron2",
-        "TotalEnergy",
+    # Dynamically detect all available physics features instead of hardcoded list
+    # This ensures it works with any particle configuration (not just 2 ions/1 neutral/2 electrons)
+    physics_feature_patterns = [
+        "KER", "EESum", "EESharing", "TotalEnergy",
+        "energy_",      # energy_ion1, energy_ion2, energy_ion3, energy_electron1, etc.
+        "mom_mag_",     # mom_mag_ion1, mom_mag_electron3, etc.
+        "theta_",       # theta_ion1, theta_electron2, etc.
+        "phi_",         # phi_ion1, phi_neutral1, etc.
     ]
-    available_features = [f for f in physics_features if f in df_with_clusters.columns]
+
+    available_features = []
+    for col in df_with_clusters.columns:
+        if col == "cluster":
+            continue
+        for pattern in physics_feature_patterns:
+            if col == pattern or col.startswith(pattern):
+                available_features.append(col)
+                break
 
     if not available_features:
         return {"physics_consistency": 0.0, "note": "No physics features available"}

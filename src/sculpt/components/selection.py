@@ -348,71 +348,10 @@ def create_selection_tab():
                                                                             "Select Physics Parameter:"
                                                                         ),
                                                                         dcc.Dropdown(
-                                                                            id="umap-physics-parameter-dropdown",
-                                                                            options=[
-                                                                                {
-                                                                                    "label": "KER (Kinetic Energy Release)",
-                                                                                    "value": "KER",
-                                                                                },
-                                                                                {
-                                                                                    "label": "EESum (Electron Energy Sum)",
-                                                                                    "value": "EESum",
-                                                                                },
-                                                                                {
-                                                                                    "label": "EESharing (Electron Energy Sharing)",
-                                                                                    "value": "EESharing",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Total Energy",
-                                                                                    "value": "TotalEnergy",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Energy Ion 1",
-                                                                                    "value": "energy_ion1",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Energy Ion 2",
-                                                                                    "value": "energy_ion2",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Energy Electron 1",
-                                                                                    "value": "energy_electron1",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Energy Electron 2",
-                                                                                    "value": "energy_electron2",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Ion-Ion Angle",
-                                                                                    "value": "angle_ion1_ion2",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Electron-Electron Angle",
-                                                                                    "value": "angle_electron1_electron2",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Ion 1 Theta (θ) Angle",
-                                                                                    "value": "theta_ion1",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Ion 2 Theta (θ) Angle",
-                                                                                    "value": "theta_ion2",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Electron 1 Theta (θ) Angle",
-                                                                                    "value": "theta_electron1",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Electron 2 Theta (θ) Angle",
-                                                                                    "value": "theta_electron2",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Momentum Difference (Ion 1-2)",
-                                                                                    "value": "momentum_diff_12",
-                                                                                },
-                                                                            ],
+                                                                            id="physics-parameter-dropdown",
+                                                                            options=[],  # Populated dynamically by update_physics_filter_dropdowns callback
                                                                             value=None,
-                                                                            placeholder="Select parameter to filter",
+                                                                            placeholder="Calculate physics features first, then select parameter",
                                                                         ),
                                                                         html.Br(),
                                                                         html.Div(
@@ -665,71 +604,10 @@ def create_selection_tab():
                                                                             "Select Physics Parameter:"
                                                                         ),
                                                                         dcc.Dropdown(
-                                                                            id="physics-parameter-dropdown",
-                                                                            options=[
-                                                                                {
-                                                                                    "label": "KER (Kinetic Energy Release)",
-                                                                                    "value": "KER",
-                                                                                },
-                                                                                {
-                                                                                    "label": "EESum (Electron Energy Sum)",
-                                                                                    "value": "EESum",
-                                                                                },
-                                                                                {
-                                                                                    "label": "EESharing (Electron Energy Sharing)",
-                                                                                    "value": "EESharing",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Total Energy",
-                                                                                    "value": "TotalEnergy",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Energy Ion 1",
-                                                                                    "value": "energy_ion1",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Energy Ion 2",
-                                                                                    "value": "energy_ion2",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Energy Electron 1",
-                                                                                    "value": "energy_electron1",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Energy Electron 2",
-                                                                                    "value": "energy_electron2",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Ion-Ion Angle",
-                                                                                    "value": "angle_ion1_ion2",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Electron-Electron Angle",
-                                                                                    "value": "angle_electron1_electron2",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Ion 1 Theta (θ) Angle",
-                                                                                    "value": "theta_ion1",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Ion 2 Theta (θ) Angle",
-                                                                                    "value": "theta_ion2",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Electron 1 Theta (θ) Angle",
-                                                                                    "value": "theta_electron1",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Electron 2 Theta (θ) Angle",
-                                                                                    "value": "theta_electron2",
-                                                                                },
-                                                                                {
-                                                                                    "label": "Momentum Difference (Ion 1-2)",
-                                                                                    "value": "momentum_diff_12",
-                                                                                },
-                                                                            ],
+                                                                            id="umap-physics-parameter-dropdown",
+                                                                            options=[],  # Populated dynamically by update_umap_physics_filter_dropdowns callback
                                                                             value=None,
-                                                                            placeholder="Select parameter to filter",
+                                                                            placeholder="Run UMAP first, then select parameter",
                                                                         ),
                                                                         html.Br(),
                                                                         html.Div(

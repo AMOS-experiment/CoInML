@@ -26,8 +26,8 @@ from dash import Input, Output, callback
     Output("save-selection-graph15-status", "children"),
     Output("show-selected-graph15-status", "children"),
     Output("save-selection-graph25-status", "children"),
-    Input("run-umap", "n_clicks"),
-    Input("umap-graph", "figure"),
+    # REMOVED: Input("run-umap", "n_clicks"),  # This conflicted with Prefect callback
+    Input("umap-graph", "figure"),  # Status updates when graph is ready instead
     Input("show-selected", "n_clicks"),
     Input("umap-graph-selected-only", "figure"),
     Input("run-umap-selected-run", "n_clicks"),
@@ -69,8 +69,7 @@ from dash import Input, Output, callback
     prevent_initial_call=True,
 )
 def update_all_status(
-    run_umap_clicks,
-    umap_fig,
+    umap_fig,  # CHANGED: removed run_umap_clicks parameter since we removed that Input
     show_selected_clicks,
     selected_fig,
     run_umap_sel_clicks,

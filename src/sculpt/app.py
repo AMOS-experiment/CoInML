@@ -1,12 +1,10 @@
+# MUST BE AT THE VERY TOP OF THE FILE - BEFORE ANY IMPORTS!
+import os
+
+# Import Dash
 import dash
 import diskcache
 from dash import DiskcacheManager
-
-# Initialize cache and background callback manager for Dash 3.2.0
-cache = diskcache.Cache("./cache")
-background_callback_manager = DiskcacheManager(cache)
-
-print("Successfully initialized DiskcacheManager for background callbacks")
 
 from sculpt.callbacks.autoencoder_callbacks import (  # noqa: F401
     calculate_features_after_assignment,
@@ -72,6 +70,7 @@ from sculpt.callbacks.filtering_callbacks import (  # noqa: F401
     update_umap_parameter_filter_controls,
     update_umap_physics_filter_dropdowns,
 )
+
 # NOTE: update_physics_filter_dropdowns and update_umap_physics_filter_dropdowns
 # are new callbacks that dynamically populate the physics parameter filter dropdowns
 # in the filtering tab, replacing the previously hardcoded options in selection.py.
@@ -94,32 +93,67 @@ from sculpt.callbacks.selection_callbacks import (  # noqa: F401
     update_umap_selected_run_only,
 )
 from sculpt.callbacks.status_callbacks import update_all_status  # noqa: F401
-from sculpt.callbacks.umap_callbacks import (  # noqa: F401
-    update_umap,
+from sculpt.callbacks.umap_callbacks import (  # noqa: F401; update_umap,  # Commented out - using Prefect version
     update_umap_graph3_selection,
     update_umap_selected_only,
     update_umap_selected_run,
 )
-from sculpt.callbacks.visualization_callbacks import (  # noqa: F401
-    toggle_clustering_params,
-    toggle_visualization_settings,
-    toggle_visualization_settings_graph15,
+
+# Import the unified UMAP Prefect callbacks (handles both Docker and local)
+from sculpt.callbacks.umap_prefect_callbacks import (  # noqa: F401
+    monitor_umap_flow_progress,
+    run_umap_analysis,
 )
+from sculpt.callbacks.visualization_callbacks import *  # noqa: F401, F403
 from sculpt.components.layout import create_layout
+
+# Detect if running in Docker and set environment
+IS_DOCKER = (
+    os.path.exists("/.dockerenv")
+    or os.getenv("DOCKER_CONTAINER") == "true"
+    or os.getenv("PREFECT_API_URL", "").startswith("http://prefect-server")
+)
+
+if IS_DOCKER:
+    os.environ["PREFECT_API_URL"] = "http://prefect-server:4200/api"
+    os.environ["DOCKER_CONTAINER"] = "true"  # Ensure this is set for callbacks
+    print("🐳 Running in Docker environment")
+else:
+    os.environ["PREFECT_API_URL"] = "http://localhost:4200/api"
+    print("💻 Running in local environment")
+
+print(f"Prefect API URL: {os.environ['PREFECT_API_URL']}")
+
+# Remove any cloud configuration
+if "PREFECT_API_KEY" in os.environ:
+    del os.environ["PREFECT_API_KEY"]
+
+# Initialize cache
+cache = diskcache.Cache("./cache")
+background_callback_manager = DiskcacheManager(cache)
+print("Successfully initialized DiskcacheManager")
+
+print("Successfully initialized DiskcacheManager for background callbacks")
+
+print("✅ UMAP Prefect callbacks loaded")
 
 # NOTE: Mass constants (mass_ion, mass_neutral, mass_electron) previously defined here
 # have been removed. All physics calculations now use the flexible configuration-aware
 # functions in physics_features.py which get masses from the assigned particle profile.
 
+# Create app
 app = dash.Dash(
     __name__,
     suppress_callback_exceptions=True,
     background_callback_manager=background_callback_manager,
 )
 app.title = "Supervised Clustering and Uncovering Latent Patterns with Training SCULPT"
-
 app.layout = create_layout()
 
-
 if __name__ == "__main__":
-    app.run(debug=True, port=9000)
+    if IS_DOCKER:
+        print("🚀 Starting SCULPT in Docker on http://0.0.0.0:9000")
+        app.run(debug=True, host="0.0.0.0", port=9000)
+    else:
+        print("🚀 Starting SCULPT locally on http://localhost:9000")
+        app.run(debug=True, port=9000)

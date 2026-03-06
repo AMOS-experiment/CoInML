@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  prefect-server:
+    image: prefecthq/prefect:3.4.2-python3.11
+    command: prefect server start
+    environment:
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://${PREFECT_DB_USER}:${PREFECT_DB_PW}@prefect-db:5432/${PREFECT_DB_NAME} # Needed if using postgres and not sqlite
+      - PREFECT_LOGGING_LEVEL=DEBUG
+    ports:
+      - "127.0.0.1:4200:4200"
+    depends_on:
+      prefect-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import requests; requests.get(\"http://localhost:4200/api/health\")' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - prefect-network
+
+  prefect-db:
+    image: postgres:14.5-alpine
+    container_name: prefect-db
+    shm_size: '1gb'
+    environment:
+      - POSTGRES_USER=${PREFECT_DB_USER}
+      - POSTGRES_PASSWORD=${PREFECT_DB_PW}
+      - POSTGRES_DB=${PREFECT_DB_NAME}
+    volumes:
+      - ./data/prefect_db:/var/lib/postgresql/data:rw
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PREFECT_DB_USER} -d ${PREFECT_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - prefect-network
+
+  # SCULPT Dash Application
+  sculpt-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    restart: unless-stopped
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      DOCKER_CONTAINER: 'true'
+      PYTHONUNBUFFERED: 1
+      PREFECT_LOCAL_STORAGE_PATH: /opt/prefect/storage
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - ./sculpt:/app/sculpt
+      - ./data:/app/data
+      - ./data/prefect-storage:/opt/prefect/storage  # Local directory
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    networks:
+      - prefect-network
+
+volumes:
+  prefect_data:
+  worker_cache:
+  app_cache:
+
+networks:
+  prefect-network:
+    driver: bridge

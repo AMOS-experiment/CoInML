@@ -25,7 +25,6 @@ services:
   prefect-db:
     image: postgres:14.5-alpine
     container_name: prefect-db
-    shm_size: '1gb'
     environment:
       - POSTGRES_USER=${PREFECT_DB_USER}
       - POSTGRES_PASSWORD=${PREFECT_DB_PW}

@@ -119,9 +119,9 @@ def load_and_prepare_data(
     description="Compute UMAP embedding on feature data",
     retries=2,
     retry_delay_seconds=30,
-    cache_key_fn=(
-        lambda context, parameters, **kwargs: f"umap_{len(parameters['feature_data'])}_{parameters['num_neighbors']}"
-        f"_{parameters['min_dist']}_{hash(str(parameters['feature_cols']))}"
+    cache_key_fn=lambda ctx, params, **kw: (
+        f"umap_{params['feature_data'].shape}_{params['num_neighbors']}"
+        f"_{params['min_dist']}_{hash(tuple(params['feature_cols']))}"
     ),
     cache_expiration=timedelta(hours=2),
 )

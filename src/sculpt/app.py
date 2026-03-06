@@ -93,11 +93,6 @@ from sculpt.callbacks.selection_callbacks import (  # noqa: F401
     update_umap_selected_run_only,
 )
 from sculpt.callbacks.status_callbacks import update_all_status  # noqa: F401
-from sculpt.callbacks.umap_callbacks import (  # noqa: F401; update_umap,  # Commented out - using Prefect version
-    update_umap_graph3_selection,
-    update_umap_selected_only,
-    update_umap_selected_run,
-)
 
 # Import the unified UMAP Prefect callbacks (handles both Docker and local)
 from sculpt.callbacks.umap_prefect_callbacks import (  # noqa: F401
